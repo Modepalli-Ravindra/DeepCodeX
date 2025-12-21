@@ -28,9 +28,15 @@ def analyze_code():
 
     # ---------- STATIC ANALYSIS (RULE-BASED) ----------
     static_result = analyze_static(code, language)
+    
+    # Override language with our enhanced detection
+    static_result["language"] = language
 
     # ---------- FINAL PIPELINE ----------
     final_result = analyze_with_fallback(code, static_result)
+    
+    # Ensure language is set correctly in final result
+    final_result["language"] = language
 
     return jsonify(final_result)
 
