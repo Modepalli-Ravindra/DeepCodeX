@@ -24,11 +24,14 @@ export interface AnalysisResult {
   fileName?: string;          // optional
 
   language: string;
+  isCode?: boolean;           // false if plain text detected
+  message?: string;           // message when no code detected
   engine?: string;            // AST + CodeBERT + LLM
   complexityLevel: ComplexityLevel;
 
   score: number;              // 0–100
   optimizationPercentage: number; // 0–100
+  refactorPercentage?: number; // 0-100
 
   timeComplexity: string;     // e.g., O(n)
   spaceComplexity: string;    // e.g., O(1)

@@ -276,124 +276,173 @@ export const CodeAnalysis: React.FC = () => {
 
         {result && (
           <>
-            {/* TOP SUMMARY */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                <p className="text-xs text-gray-400">COMPLEXITY</p>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-3xl font-bold text-yellow-400">
-                    {result.complexityLevel}
-                  </h2>
-                  <Zap className="text-yellow-400" />
+            {/* CHECK IF IT'S ACTUALLY CODE */}
+            {result.isCode === false ? (
+              /* NO CODE DETECTED */
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-12">
+                <div className="w-24 h-24 rounded-full bg-gray-800/50 flex items-center justify-center">
+                  <span className="text-5xl">📄</span>
                 </div>
-                <p className="text-sm text-gray-400">
-                  Score: {result.score}/100
-                </p>
-                <div className="mt-3 h-2 bg-gray-800 rounded">
-                  <div
-                    className="h-2 bg-primary rounded"
-                    style={{ width: `${result.score}%` }}
-                  />
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-300 mb-2">No Code Detected</h2>
+                  <p className="text-gray-500 max-w-xs">
+                    The input appears to be plain text, not source code.
+                  </p>
+                </div>
+                <div className="bg-surface rounded-xl p-5 border border-gray-800 w-full max-w-sm">
+                  <p className="text-xs text-gray-400 mb-3">SUPPORTED LANGUAGES</p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {["🐍 Python", "☕ Java", "⚡ C++", "🔧 C", "📜 JavaScript", "📘 TypeScript", "🐹 Go", "🦀 Rust", "💎 Ruby", "🐘 PHP"].map((lang) => (
+                      <span key={lang} className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-400">
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 max-w-sm">
+                  <p className="text-yellow-500 text-sm">
+                    💡 Tip: Paste code with functions, loops, or class definitions for complexity analysis.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-4 w-full opacity-30">
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">Time Complexity</p>
+                    <p className="text-2xl font-bold text-gray-600">N/A</p>
+                  </div>
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">Space Complexity</p>
+                    <p className="text-2xl font-bold text-gray-600">N/A</p>
+                  </div>
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">Score</p>
+                    <p className="text-2xl font-bold text-gray-600">0</p>
+                  </div>
                 </div>
               </div>
-
-              <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                <p className="text-xs text-gray-400">Time Complexity</p>
-                <p className="text-2xl font-bold text-blue-400">
-                  {result.timeComplexity}
-                </p>
-              </div>
-
-              <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                <p className="text-xs text-gray-400">Space Complexity</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {result.spaceComplexity}
-                </p>
-              </div>
-            </div>
-
-            {/* EFFICIENCY METRICS */}
-            <div className="bg-surface rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold mb-4">Efficiency Metrics</h3>
-              <div className="grid grid-cols-2 gap-y-3 text-sm text-gray-300">
-                <div>Score</div><div>{result.score}/100</div>
-                <div>Optimization</div><div>{result.optimizationPercentage}%</div>
-                <div>Language</div>
-                <div className="flex items-center gap-2">
-                  <span>{detectedLanguage.icon}</span>
-                  <span style={{ color: detectedLanguage.color }}>{result.language}</span>
-                </div>
-                <div>Engine</div>
-                <div>AST + Rule Engine + Regex + LLM (suggestions only)</div>
-              </div>
-            </div>
-
-            {/* STRUCTURAL ANALYSIS */}
-            <div className="bg-surface rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold mb-4">Structural Analysis</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metricData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        interval={0}
-                        tick={{ fill: "#94a3b8", fontSize: 12 }}
-                        axisLine={false}
-                        tickLine={false}
+            ) : (
+              /* NORMAL CODE ANALYSIS RESULTS */
+              <>
+                {/* TOP SUMMARY */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">COMPLEXITY</p>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-3xl font-bold text-yellow-400">
+                        {result.complexityLevel}
+                      </h2>
+                      <Zap className="text-yellow-400" />
+                    </div>
+                    <p className="text-sm text-gray-400">
+                      Score: {result.score}/100
+                    </p>
+                    <div className="mt-3 h-2 bg-gray-800 rounded">
+                      <div
+                        className="h-2 bg-primary rounded"
+                        style={{ width: `${result.score}%` }}
                       />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#6366f1" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="text-sm text-gray-300 space-y-2">
-                  <div>Total Code Volume: {result.metrics.linesOfCode}</div>
-                  <div>Functional Units: {result.metrics.functionCount}</div>
-                  <div>Iterative Density: {result.metrics.loopCount}</div>
-                  <div>Logical Branches: {result.metrics.conditionalCount}</div>
-                  <div>Cyclomatic Index: {result.metrics.cyclomaticComplexity}</div>
-                </div>
-              </div>
-            </div>
+                    </div>
+                  </div>
 
-            {/* REFACTOR POTENTIAL */}
-            <div className="bg-surface rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold mb-4">Refactor Potential</h3>
-              <div className="h-[180px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={optimizationData}
-                      dataKey="value"
-                      innerRadius={70}
-                      outerRadius={90}
-                    >
-                      <Cell fill="#6366f1" />
-                      <Cell fill="#1e293b" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center text-xl font-bold">
-                  {result.optimizationPercentage}%
-                </div>
-              </div>
-            </div>
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">Time Complexity</p>
+                    <p className="text-2xl font-bold text-blue-400">
+                      {result.timeComplexity}
+                    </p>
+                  </div>
 
-            {/* REFACTOR STRATEGY */}
-            <div className="bg-surface rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold mb-3">Refactor Strategy</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                {result.suggestions.map((s, i) => (
-                  <li key={i}>• {s}</li>
-                ))}
-              </ul>
-            </div>
+                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
+                    <p className="text-xs text-gray-400">Space Complexity</p>
+                    <p className="text-2xl font-bold text-green-400">
+                      {result.spaceComplexity}
+                    </p>
+                  </div>
+                </div>
+
+                {/* EFFICIENCY METRICS */}
+                <div className="bg-surface rounded-xl p-6 border border-gray-800">
+                  <h3 className="text-sm font-semibold mb-4">Efficiency Metrics</h3>
+                  <div className="grid grid-cols-2 gap-y-3 text-sm text-gray-300">
+                    <div>Score</div><div>{result.score}/100</div>
+                    <div>Optimization</div><div>{result.optimizationPercentage}%</div>
+                    <div>Language</div>
+                    <div className="flex items-center gap-2">
+                      <span>{detectedLanguage.icon}</span>
+                      <span style={{ color: detectedLanguage.color }}>{result.language}</span>
+                    </div>
+                    <div>Engine</div>
+                    <div>AST + Rule Engine + Regex + LLM (suggestions only)</div>
+                  </div>
+                </div>
+
+                {/* STRUCTURAL ANALYSIS */}
+                <div className="bg-surface rounded-xl p-6 border border-gray-800">
+                  <h3 className="text-sm font-semibold mb-4">Structural Analysis</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={metricData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="name"
+                            interval={0}
+                            tick={{ fill: "#94a3b8", fontSize: 12 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#6366f1" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="text-sm text-gray-300 space-y-2">
+                      <div>Total Code Volume: {result.metrics.linesOfCode}</div>
+                      <div>Functional Units: {result.metrics.functionCount}</div>
+                      <div>Iterative Density: {result.metrics.loopCount}</div>
+                      <div>Logical Branches: {result.metrics.conditionalCount}</div>
+                      <div>Cyclomatic Index: {result.metrics.cyclomaticComplexity}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* REFACTOR POTENTIAL */}
+                <div className="bg-surface rounded-xl p-6 border border-gray-800">
+                  <h3 className="text-sm font-semibold mb-4">Refactor Potential</h3>
+                  <div className="h-[180px] relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={optimizationData}
+                          dataKey="value"
+                          innerRadius={70}
+                          outerRadius={90}
+                        >
+                          <Cell fill="#6366f1" />
+                          <Cell fill="#1e293b" />
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center text-xl font-bold">
+                      {result.optimizationPercentage}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* REFACTOR STRATEGY */}
+                <div className="bg-surface rounded-xl p-6 border border-gray-800">
+                  <h3 className="text-sm font-semibold mb-3">Refactor Strategy</h3>
+                  <ul className="space-y-2 text-sm text-gray-300">
+                    {result.suggestions.map((s, i) => (
+                      <li key={i}>• {s}</li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
     </div>
   );
 };
+

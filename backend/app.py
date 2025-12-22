@@ -26,6 +26,33 @@ def analyze_code():
     # ---------- LANGUAGE DETECTION ----------
     language = detect_language(code)
 
+    # ---------- CHECK FOR PLAIN TEXT (NO CODE) ----------
+    if language == "Plain Text":
+        return jsonify({
+            "language": "Plain Text",
+            "isCode": False,
+            "engine": "None",
+            "message": "No code detected. Please paste valid source code.",
+            "metrics": {
+                "linesOfCode": len(code.strip().split('\n')),
+                "functionCount": 0,
+                "loopCount": 0,
+                "conditionalCount": 0,
+                "cyclomaticComplexity": 0,
+            },
+            "timeComplexity": "N/A",
+            "spaceComplexity": "N/A",
+            "complexityLevel": "None",
+            "score": 0,
+            "refactorPercentage": 0,
+            "optimizationPercentage": 0,
+            "suggestions": [
+                "The input appears to be plain text, not code.",
+                "Please paste source code in a supported language:",
+                "Python, Java, C++, C, JavaScript, TypeScript, Go, Rust, Ruby, or PHP."
+            ],
+        })
+
     # ---------- STATIC ANALYSIS (RULE-BASED) ----------
     static_result = analyze_static(code, language)
     
@@ -37,6 +64,7 @@ def analyze_code():
     
     # Ensure language is set correctly in final result
     final_result["language"] = language
+    final_result["isCode"] = True
 
     return jsonify(final_result)
 
