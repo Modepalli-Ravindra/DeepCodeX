@@ -767,7 +767,8 @@ class PerFunctionAnalyzer:
                 loop_starts.pop()
                 current_depth -= 1
         
-    
+        return max_depth
+
     def _get_worst_complexity(self, complexities: List[str]) -> str:
         """Return the WORST (highest) complexity using MAX, not multiply."""
         if not complexities:
