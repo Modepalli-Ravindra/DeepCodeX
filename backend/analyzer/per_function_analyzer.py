@@ -298,7 +298,7 @@ class PerFunctionAnalyzer:
         
         # Generate reasoning
         reasoning = self._generate_reasoning(
-            loop_depth, recursion_type, recursion_calls, time_complexity
+            loop_depth, recursion_type, recursion_calls, time_complexity, func_code
         )
         
         return FunctionComplexity(
@@ -478,7 +478,8 @@ class PerFunctionAnalyzer:
     def _generate_reasoning(self, loop_depth: int, 
                            recursion_type: RecursionType,
                            recursion_calls: int, 
-                           time_complexity: str) -> str:
+                           time_complexity: str,
+                           code: str) -> str:
         """Generate human-readable reasoning."""
         reasons = []
         
@@ -496,7 +497,7 @@ class PerFunctionAnalyzer:
             reasons.append(type_desc.get(recursion_type, str(recursion_type.value)))
         
         # Add Graph context if detected
-        if any(w in reasons[-1].lower() if reasons else "" for w in ["linear", "nested"]) and "visited" in code.lower():
+        if any(w in (reasons[-1].lower() if reasons else "") for w in ["linear", "nested"]) and "visited" in code.lower():
             reasons.append("graph traversal structure O(V+E)")
         
         if not reasons:
@@ -629,7 +630,7 @@ class PerFunctionAnalyzer:
                     break
 
         reasoning = self._generate_reasoning(
-            loop_depth, recursion_type, recursion_calls, time_complexity
+            loop_depth, recursion_type, recursion_calls, time_complexity, code
         )
         
         return FunctionComplexity(
