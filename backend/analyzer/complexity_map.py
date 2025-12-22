@@ -50,8 +50,8 @@ def resolve_complexity(pattern: str):
         return "O(n log n)", "O(n)"
 
     if pattern == "QUICK_SORT":
-        # Average case: O(n log n), space for recursion stack
-        return "O(n log n)", "O(log n)"
+        # Average case: O(n log n), but Worst-case (pathological) is O(n²)
+        return "O(n²)", "O(log n)"
 
     if pattern == "SELECTION_SORT":
         # Nested loops: find minimum n times

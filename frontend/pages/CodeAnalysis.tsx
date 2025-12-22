@@ -119,10 +119,10 @@ const isPlainText = (code: string): boolean => {
     // Code indicators
     const isCode =
       /^\s*(def|function|class|public|private|void|int|bool)\s+\w+/.test(trimmed) ||
-      /^\s*(if|for|while|switch)\s*\(/.test(trimmed) ||
-      /^\s*(import|from\s+\w+\s+import|#include|require)\s/.test(trimmed) ||
-      /[{};]\s*$/.test(trimmed) ||
-      /=/.test(trimmed) && /[a-z_]\w*\s*=/i.test(trimmed);
+      /^\s*(if|for|while|elif|else|switch|match|try|catch|finally|with|func|fn)\b/.test(trimmed) ||
+      /^\s*(import|from\s+\w+\s+import|#include|require|use|package)\s/.test(trimmed) ||
+      /[{};:]\s*$/.test(trimmed) ||
+      (/=/.test(trimmed) && /[a-z_]\w*\s*(=|\+=|-=)/i.test(trimmed));
 
     if (isProse && !isCode) proseLines++;
     else if (isCode && !isProse) codeLines++;
@@ -365,11 +365,11 @@ export const CodeAnalysis: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-3 gap-4 w-full opacity-30">
                   <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Time Complexity</p>
+                    <p className="text-xs text-gray-400">Worst-Case Time</p>
                     <p className="text-2xl font-bold text-gray-600">N/A</p>
                   </div>
                   <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Space Complexity</p>
+                    <p className="text-xs text-gray-400">Worst-Case Space</p>
                     <p className="text-2xl font-bold text-gray-600">N/A</p>
                   </div>
                   <div className="bg-surface rounded-xl p-5 border border-gray-800">
@@ -381,120 +381,102 @@ export const CodeAnalysis: React.FC = () => {
             ) : (
               /* NORMAL CODE ANALYSIS RESULTS */
               <>
-                {/* TOP SUMMARY */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">COMPLEXITY</p>
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-3xl font-bold text-yellow-400">
-                        {result.complexityLevel}
-                      </h2>
-                      <Zap className="text-yellow-400" />
+                <div className="space-y-8">
+                  {/* BIG METRICS: TIME & SPACE */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="bg-surface/50 border border-gray-800 rounded-3xl p-8 hover:border-indigo-500/50 transition-all group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Zap className="w-20 h-20" />
+                      </div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Worst-Case Time</p>
+                      <h2 className="text-5xl font-black text-indigo-400 tracking-tighter">{result.timeComplexity}</h2>
+                      <p className="text-xs text-gray-400 mt-4 font-mono group-hover:text-indigo-300/70 transition-colors">
+                        Driver: {result.worstTimeFunction?.split(', ')[0] || "main"}()
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-400">
-                      Score: {result.score}/100
+
+                    <div className="bg-surface/50 border border-gray-800 rounded-3xl p-8 hover:border-emerald-500/50 transition-all group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Code2 className="w-20 h-20" />
+                      </div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Worst-Case Space</p>
+                      <h2 className="text-5xl font-black text-emerald-400 tracking-tighter">{result.spaceComplexity}</h2>
+                      <p className="text-xs text-gray-400 mt-4 font-mono group-hover:text-emerald-300/70 transition-colors">
+                        Driver: {result.worstSpaceFunction?.split(', ')[0] || "main"}()
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* SUMMARY NOTE */}
+                  {result.summary && (
+                    <div className="px-6 py-4 bg-white/[0.03] border border-white/5 rounded-2xl">
+                      <p className="text-xs text-indigo-300/80 leading-relaxed font-medium italic">
+                        {result.summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* CORE STATISTICS GRID */}
+                  <div className="bg-surface border border-gray-800 rounded-3xl overflow-hidden divide-y divide-gray-800">
+                    <div className="grid grid-cols-2 divide-x divide-gray-800">
+                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Lines of Code</p>
+                        <p className="text-3xl font-bold text-gray-100">{result.metrics.linesOfCode}</p>
+                      </div>
+                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Functions</p>
+                        <p className="text-3xl font-bold text-gray-100">{result.metrics.functionCount}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 divide-x divide-gray-800">
+                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Loops</p>
+                        <p className="text-3xl font-bold text-gray-100">{result.metrics.loopCount}</p>
+                      </div>
+                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Conditions</p>
+                        <p className="text-3xl font-bold text-gray-100">{result.metrics.conditionalCount}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* OPTIMIZATION & SUGGESTIONS */}
+                  <div className="bg-gradient-to-br from-indigo-600/10 to-purple-600/10 border border-indigo-500/20 rounded-3xl p-8 relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-8">
+                      <div>
+                        <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold mb-2">Peak Optimization Potential</p>
+                        <h3 className="text-4xl font-black text-white">{result.optimizationPercentage}%</h3>
+                      </div>
+                      <div className="bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-500/30">
+                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-tighter">AI Suggestions Powered by Gemini</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Improvement Roadmap</p>
+                      <div className="grid gap-3">
+                        {result.suggestions.map((s: string, i: number) => (
+                          <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600/50 text-[10px] font-bold flex items-center justify-center">
+                              0{i + 1}
+                            </span>
+                            <p className="text-sm text-gray-200 leading-relaxed font-medium">{s}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACCURACY FOOTER */}
+                  <div className="flex flex-col items-center gap-2 pt-4">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">High-Precision Asymptotic Model</span>
+                    </div>
+                    <p className="text-[8px] text-gray-700 uppercase tracking-[0.3em] font-medium">
+                      Analyzes scaling drivers and constant-bounded call paths
                     </p>
-                    <div className="mt-3 h-2 bg-gray-800 rounded">
-                      <div
-                        className="h-2 bg-primary rounded"
-                        style={{ width: `${result.score}%` }}
-                      />
-                    </div>
                   </div>
-
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Time Complexity</p>
-                    <p className="text-2xl font-bold text-blue-400">
-                      {result.timeComplexity}
-                    </p>
-                  </div>
-
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Space Complexity</p>
-                    <p className="text-2xl font-bold text-green-400">
-                      {result.spaceComplexity}
-                    </p>
-                  </div>
-                </div>
-
-                {/* EFFICIENCY METRICS */}
-                <div className="bg-surface rounded-xl p-6 border border-gray-800">
-                  <h3 className="text-sm font-semibold mb-4">Efficiency Metrics</h3>
-                  <div className="grid grid-cols-2 gap-y-3 text-sm text-gray-300">
-                    <div>Score</div><div>{result.score}/100</div>
-                    <div>Optimization</div><div>{result.optimizationPercentage}%</div>
-                    <div>Language</div>
-                    <div className="flex items-center gap-2">
-                      <span>{detectedLanguage.icon}</span>
-                      <span style={{ color: detectedLanguage.color }}>{result.language}</span>
-                    </div>
-                    <div>Engine</div>
-                    <div>AST + Rule Engine + Regex + LLM (suggestions only)</div>
-                  </div>
-                </div>
-
-                {/* STRUCTURAL ANALYSIS */}
-                <div className="bg-surface rounded-xl p-6 border border-gray-800">
-                  <h3 className="text-sm font-semibold mb-4">Structural Analysis</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="h-[220px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={metricData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis
-                            dataKey="name"
-                            interval={0}
-                            tick={{ fill: "#94a3b8", fontSize: 12 }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#6366f1" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="text-sm text-gray-300 space-y-2">
-                      <div>Total Code Volume: {result.metrics.linesOfCode}</div>
-                      <div>Functional Units: {result.metrics.functionCount}</div>
-                      <div>Iterative Density: {result.metrics.loopCount}</div>
-                      <div>Logical Branches: {result.metrics.conditionalCount}</div>
-                      <div>Cyclomatic Index: {result.metrics.cyclomaticComplexity}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* REFACTOR POTENTIAL */}
-                <div className="bg-surface rounded-xl p-6 border border-gray-800">
-                  <h3 className="text-sm font-semibold mb-4">Refactor Potential</h3>
-                  <div className="h-[180px] relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={optimizationData}
-                          dataKey="value"
-                          innerRadius={70}
-                          outerRadius={90}
-                        >
-                          <Cell fill="#6366f1" />
-                          <Cell fill="#1e293b" />
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center text-xl font-bold">
-                      {result.optimizationPercentage}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* REFACTOR STRATEGY */}
-                <div className="bg-surface rounded-xl p-6 border border-gray-800">
-                  <h3 className="text-sm font-semibold mb-3">Refactor Strategy</h3>
-                  <ul className="space-y-2 text-sm text-gray-300">
-                    {result.suggestions.map((s, i) => (
-                      <li key={i}>• {s}</li>
-                    ))}
-                  </ul>
                 </div>
               </>
             )}

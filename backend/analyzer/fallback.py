@@ -45,18 +45,20 @@ def refactor_percentage(static: dict) -> int:
 
 
 def optimization_percentage(static: dict) -> int:
+    """Realistic optimization potential (max 40-50% for typical code)."""
     potential = 0
 
-    potential += static.get("maxLoopDepth", 0) * 10
-    potential += static.get("dynamicAllocations", 0) * 5
-    potential += static.get("conditionalCount", 0)
-
+    # High complexity / depth suggests *some* overhead, but not 100%
+    potential += min(15, static.get("maxLoopDepth", 0) * 3)
+    potential += min(10, static.get("dynamicAllocations", 0) * 1)
+    
     if static.get("multiRecursion"):
-        potential += 20
-    elif static.get("hasRecursion"):
         potential += 10
+    elif static.get("hasRecursion"):
+        potential += 5
 
-    return min(100, potential)
+    # Cap at 45% to reflect that core algorithms (sorting, DP) are often essential
+    return min(45, potential)
 
 
 def quality_score(static: dict) -> int:
@@ -87,23 +89,33 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
     4. Always use MAX (not multiply) for worst-case
     """
     
-    # Layer 1: Pattern Recognition (for known algorithms)
+    # Layer 2: Per-function analysis (CORE STRUCTURAL ANALYSIS)
+    per_func_result = analyze_per_function(code)
+    
+    final_time = per_func_result.get("worstTime", "O(n)")
+    final_space = per_func_result.get("worstSpace", "O(1)")
+    found_pattern_name = None
+    
+    # Layer 1: Pattern Recognition (RECOGNITION OVERRIDE)
     pattern = PatternAnalyzer(code, static).detect()
     
-    if pattern and PatternConfidence.is_confident(pattern, code, static):
-        # Known algorithm detected - use authoritative complexity
-        time_complexity, space_complexity = resolve_complexity(pattern)
-        engine = f"Pattern Engine: {pattern}"
-        per_func_result = None
-    else:
-        # Layer 2: Per-function analysis (correct approach for multi-function code)
-        per_func_result = analyze_per_function(code)
-        time_complexity = per_func_result.get("worstTime", "O(n)")
-        space_complexity = per_func_result.get("worstSpace", "O(1)")
-        engine = "Per-Function Analyzer"
+    # COMPLEXITY ORDERING (Internal helper)
+    ORDER = {"O(1)": 0, "O(log n)": 1, "O(√n)": 2, "O(n)": 3, "O(n log n)": 4, "O(n²)": 5, "O(n³)": 6, "O(2ⁿ)": 7, "O(n!)": 8}
     
-    # Get complexity level from worst-case
-    level = complexity_level_from_worst(time_complexity)
+    if pattern and PatternConfidence.is_confident(pattern, code, static):
+        p_time, p_space = resolve_complexity(pattern)
+        # DOMINANCE RULE: Final complexity = MAX(Logic, Pattern)
+        if ORDER.get(p_time, 0) > ORDER.get(final_time, 0):
+            # Gate: Pattern cannot elevate O(1) demos to O(n!/2ⁿ) unless logic agrees it's scaling
+            if p_time in ["O(2ⁿ)", "O(n!)"] and final_time not in ["O(2ⁿ)", "O(n!)"]:
+                pass
+            else:
+                final_time = p_time
+                final_space = p_space
+                found_pattern_name = pattern
+    
+    # Get complexity level from final consensus
+    level = complexity_level_from_worst(final_time)
     
     # Get suggestions
     try:
@@ -118,18 +130,17 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
     # Build result
     result = {
         "language": static.get("language", "Auto"),
-        "engine": engine,
+        "engine": f"Hybrid Static Analyzer (Pattern: {found_pattern_name})" if found_pattern_name else "Per-Function Logic Engine",
         "metrics": {
             "linesOfCode": static.get("linesOfCode", 0),
             "functionCount": static.get("functionCount", 1),
             "loopCount": static.get("loopCount", 0),
             "conditionalCount": static.get("conditionalCount", 0),
-            "cyclomaticComplexity": static.get("cyclomaticComplexity", 1),
         },
         
         # Worst-case complexity
-        "timeComplexity": time_complexity,
-        "spaceComplexity": space_complexity,
+        "timeComplexity": final_time,
+        "spaceComplexity": final_space,
         
         "complexityLevel": level,
         "score": quality_score(static),

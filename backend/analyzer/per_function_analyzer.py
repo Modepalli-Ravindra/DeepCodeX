@@ -43,6 +43,9 @@ class FunctionComplexity:
     has_loop_in_recursion: bool = False
     data_structures: List[str] = field(default_factory=list)
     reasoning: str = ""
+    category: str = "General"
+    external_calls: List[Tuple[str, bool]] = field(default_factory=list)  # (name, is_constant_call)
+    uses_param_as_bound: bool = False
 
 
 @dataclass
@@ -97,31 +100,71 @@ class PerFunctionAnalyzer:
                 "main", self.code, 1, len(self.code.split('\n'))
             ))
         
-        # Compute worst-case using MAX (not multiply!)
-        worst_time = self._get_worst_complexity([f.time_complexity for f in self.functions])
-        worst_space = self._get_worst_complexity([f.space_complexity for f in self.functions])
+        # Phase 2: Global Effective Complexity Analysis
+        called_with_scaling = set()
+        for f in self.functions:
+            for name, is_const in f.external_calls:
+                if not is_const:
+                    called_with_scaling.add(name)
         
-        worst_time_func = next(
-            (f.name for f in self.functions if f.time_complexity == worst_time),
-            self.functions[0].name if self.functions else "unknown"
-        )
-        worst_space_func = next(
-            (f.name for f in self.functions if f.space_complexity == worst_space),
-            self.functions[0].name if self.functions else "unknown"
-        )
+        effective_times = []
+        for f in self.functions:
+            is_entry = f.name == "main" or f.name.startswith("run_")
+            is_scaling = f.name in called_with_scaling
+            
+            # CORE RULE: Symbolic Collapse only applies to Exponential/Factorial demo code.
+            # Scaling drivers like O(n³) or O(n²) should be reported if they are the primary logic.
+            # A function is 'Effective' O(1) ONLY if it's a high-complexity demo called with constants.
+            
+            should_collapse = False
+            if f.time_complexity in ["O(2ⁿ)", "O(n!)"]:
+                if not is_scaling and not is_entry and not f.uses_param_as_bound:
+                    should_collapse = True
+            
+            if should_collapse:
+                effective_times.append((f.name, "O(1)"))
+            else:
+                # If it's a scaling driver (O(n³), O(n²)) or actually called with symbols, it's effective.
+                effective_times.append((f.name, f.time_complexity))
+
+        # Compute worst-case among EFFECTIVE complexities
+        # STRICT RULE: MAX(Big-O) is the only source of worst-case truth.
+        worst_time = self._get_worst_complexity([et[1] for et in effective_times])
+        
+        effective_spaces = []
+        for f in self.functions:
+            effective_spaces.append((f.name, f.space_complexity))
+                
+        worst_space = self._get_worst_complexity([es[1] for es in effective_spaces])
+        
+        # Consistent Driver Attribution: Prioritize the highest asymptotic order
+        worst_time_funcs = [et[0] for et in effective_times if et[1] == worst_time]
+        if len(worst_time_funcs) > 1 and "main" in worst_time_funcs:
+            worst_time_funcs.remove("main")
+            
+        worst_space_funcs = [es[0] for es in effective_spaces if es[1] == worst_space]
+        if len(worst_space_funcs) > 1 and "main" in worst_space_funcs:
+            worst_space_funcs.remove("main")
+        
+        # Fallback if everything is O(1)
+        if not worst_time_funcs: worst_time_funcs = [et[0] for et in effective_times if et[1] == worst_time]
+        if not worst_space_funcs: worst_space_funcs = [es[0] for es in effective_spaces if es[1] == worst_space]
+
+        worst_time_func_str = ", ".join(worst_time_funcs)
+        worst_space_func_str = ", ".join(worst_space_funcs)
         
         # Determine complexity level
         level = self._get_complexity_level(worst_time)
         
         # Generate summary
-        summary = self._generate_summary(worst_time, worst_space, worst_time_func)
+        summary = self._generate_summary(worst_time, worst_space, worst_time_funcs)
         
         return AnalysisResult(
             functions=self.functions,
             worst_time=worst_time,
             worst_space=worst_space,
-            worst_time_function=worst_time_func,
-            worst_space_function=worst_space_func,
+            worst_time_function=worst_time_func_str,
+            worst_space_function=worst_space_func_str,
             complexity_level=level,
             summary=summary
         )
@@ -158,10 +201,12 @@ class PerFunctionAnalyzer:
                 self.loop_depth = 0
                 self.max_loop_depth = 0
                 self.loop_count = 0
-                self.recursion_calls = 0
                 self.has_loop_in_recursion = False
-                self.in_recursion = False
                 self.allocations = []
+                self.external_calls = []
+                self.params = [a.arg for a in node.args.args]
+                self.uses_param_as_bound = False
+                self.recursion_calls = 0
             
             def visit_For(self, n):
                 self.loop_count += 1
@@ -169,6 +214,13 @@ class PerFunctionAnalyzer:
                 self.max_loop_depth = max(self.max_loop_depth, self.loop_depth)
                 if self.in_recursion:
                     self.has_loop_in_recursion = True
+                
+                # Check if param is used in range() or iterator
+                if hasattr(n, 'iter'):
+                    for name_node in ast.walk(n.iter):
+                        if isinstance(name_node, ast.Name) and name_node.id in self.params:
+                            self.uses_param_as_bound = True
+                
                 self.generic_visit(n)
                 self.loop_depth -= 1
             
@@ -178,13 +230,30 @@ class PerFunctionAnalyzer:
                 self.max_loop_depth = max(self.max_loop_depth, self.loop_depth)
                 if self.in_recursion:
                     self.has_loop_in_recursion = True
+                
+                # Check if param is used in test
+                for name_node in ast.walk(n.test):
+                    if isinstance(name_node, ast.Name) and name_node.id in self.params:
+                        self.uses_param_as_bound = True
+                        
                 self.generic_visit(n)
                 self.loop_depth -= 1
             
             def visit_Call(self, n):
-                if isinstance(n.func, ast.Name) and n.func.id == func_name:
-                    self.recursion_calls += 1
-                    self.in_recursion = True
+                if isinstance(n.func, ast.Name):
+                    if n.func.id == func_name:
+                        self.recursion_calls += 1
+                        self.in_recursion = True
+                        
+                        # Check if param is used in recursive call args (decrement/driver)
+                        for arg in n.args:
+                            for name_node in ast.walk(arg):
+                                if isinstance(name_node, ast.Name) and name_node.id in self.params:
+                                    self.uses_param_as_bound = True
+                    else:
+                        # Detect if call is constant-bounded (literal arguments)
+                        is_constant = len(n.args) > 0 and all(isinstance(arg, (ast.Constant, ast.Num, ast.Str, ast.Bytes, ast.NameConstant)) for arg in n.args)
+                        self.external_calls.append((n.func.id, is_constant))
                 self.generic_visit(n)
             
             def visit_List(self, n):
@@ -240,7 +309,9 @@ class PerFunctionAnalyzer:
             recursion_calls=recursion_calls,
             has_loop_in_recursion=visitor.has_loop_in_recursion,
             data_structures=data_structures,
-            reasoning=reasoning
+            reasoning=reasoning,
+            external_calls=visitor.external_calls,
+            uses_param_as_bound=visitor.uses_param_as_bound
         )
     
     def _classify_recursion(self, code: str, func_name: str, 
@@ -259,37 +330,42 @@ class PerFunctionAnalyzer:
         
         code_lower = code.lower()
         
-        # Check for FACTORIAL pattern: permutation with swap
-        if (re.search(r'permut', code_lower) and 
-            re.search(r'swap|\.append|result', code_lower) and
-            recursion_calls >= 1):
-            return RecursionType.FACTORIAL
+        # 1. FACTORIAL pattern: recursive call INSIDE a loop (branching factor grows with n)
+        if recursion_calls >= 1 and has_loop:
+            # Look for common loop motifs in factorial/backtracking
+            if re.search(r'for\s+\w+\s+in\s+range|for\s*\(.*;\s*.*;\s*.*\)', code_lower):
+                return RecursionType.FACTORIAL
         
-        # Check for swap-based permutation (backtracking)
-        if (re.search(r'for\s+\w+\s+in\s+range', code_lower) and
-            re.search(r'swap', code_lower) and recursion_calls >= 1):
-            return RecursionType.FACTORIAL
-        
-        # Check for EXPONENTIAL: multiple recursive calls like Fibonacci
+        # 2. EXPONENTIAL pattern: multiple recursive calls NOT inside a loop
         if recursion_calls >= 2:
-            # f(n-1) + f(n-2) pattern
+            # f(n-1) + f(n-2)
             if re.search(rf'{func_name}\s*\([^)]*-\s*1[^)]*\).*{func_name}\s*\([^)]*-\s*2', code):
                 return RecursionType.EXPONENTIAL
-            # General: 2+ recursive calls without merge
-            if not re.search(r'merge|left|right|mid', code_lower):
+            # If no divide-conquer signs, it's likely exponential
+            if not re.search(r'/\s*2|//\s*2|>>\s*1|mid|left|right', code_lower):
                 return RecursionType.EXPONENTIAL
         
-        # Check for DIVIDE_CONQUER: recursion with n/2 + merge
-        if (re.search(r'/\s*2|//\s*2|>>\s*1', code) and 
-            re.search(r'merge|left|right', code_lower)):
+        # 3. DIVIDE_CONQUER pattern
+        if (re.search(r'/\s*2|//\s*2|>>\s*1', code) or re.search(r'mid|pivot|partition', code_lower)):
+            if recursion_calls >= 2:
+                # Check for QuickSort (usually has 'partition' or 'pivot')
+                if re.search(r'partition|pivot', code_lower):
+                    # We classify this as a special type that defaults to O(n²) worst case
+                    return RecursionType.DIVIDE_CONQUER
             return RecursionType.DIVIDE_CONQUER
         
-        # Check for BINARY: single recursion with n/2
-        if (recursion_calls == 1 and 
-            re.search(r'/\s*2|//\s*2|>>\s*1', code)):
+        # 4. BINARY pattern (Binary Search / f(n/2))
+        # f(n/2)
+        if (re.search(r'/\s*2|//\s*2|>>\s*1', code) or 
+            re.search(rf'{func_name}\s*\([^)]*/\s*2[^)]*\)', code)):
             return RecursionType.BINARY
         
-        # Default: LINEAR recursion f(n-1)
+        # 5. LINEAR pattern (f(n-1))
+        # f(n-1)
+        if re.search(rf'{func_name}\s*\([^)]*-\s*1[^)]*\)', code):
+            return RecursionType.LINEAR
+        
+        # Default fallback
         return RecursionType.LINEAR
     
     def _compute_time_complexity(self, loop_depth: int, loop_count: int,
@@ -307,6 +383,10 @@ class PerFunctionAnalyzer:
             return "O(2ⁿ)"
         
         if recursion_type == RecursionType.DIVIDE_CONQUER:
+            # Worst-case for QuickSort is O(n²), for MergeSort O(n log n). 
+            # If we see pivot/partition, assume O(n²) worst-case.
+            if re.search(r'partition|pivot', code.lower()):
+                return "O(n²)"
             return "O(n log n)"
         
         if recursion_type == RecursionType.BINARY:
@@ -322,8 +402,8 @@ class PerFunctionAnalyzer:
             return "O(1)"
         
         if loop_depth == 1:
-            # Check for logarithmic loop
-            if re.search(r'/=\s*2|//=\s*2|>>=\s*1', code):
+            # Check for logarithmic loop (i *= 2, i /= 2, i >>= 1)
+            if re.search(r'\*=\s*2|/=\s*2|//=\s*2|>>=\s*1|\b\w+\s*=\s*\w+\s*\*|/\s*2', code):
                 return "O(log n)"
             return "O(n)"
         
@@ -346,13 +426,16 @@ class PerFunctionAnalyzer:
         """
         space_complexities = []
         
-        # Check for 2D array/matrix
-        if re.search(r'\[\s*\[|matrix|\[\w+\]\[\w+\]', code.lower()):
+        # Check for 2D array/matrix ALLOCATION (not just mention)
+        if re.search(r'new\s+\w+\[[^\]]+\]\s*\[|\[\w+\]\s*\[\w+\]\s*=|\[\s*\[.*for.*in.*\]', code):
+            space_complexities.append("O(n²)")
+        elif re.search(r'matrix|grid|table', code.lower()) and "[" in code:
+            # Softer check for matrix usage
             space_complexities.append("O(n²)")
         
-        # Check for DP table
-        if re.search(r'dp\s*\[|memo\s*\[|table\s*\[', code.lower()):
-            if re.search(r'\]\s*\[', code):  # 2D
+        # Check for DP table (Scaling)
+        if re.search(r'dp\s*\[|memo\s*\[', code.lower()):
+            if re.search(r'\]\s*\[', code):  # 2D table
                 space_complexities.append("O(n²)")
             else:
                 space_complexities.append("O(n)")
@@ -363,15 +446,15 @@ class PerFunctionAnalyzer:
         elif data_structures:
             space_complexities.append("O(n)")
         
-        # Recursion stack space
+        # Recursion stack space (Depth of recursion)
         if recursion_type == RecursionType.BINARY:
-            space_complexities.append("O(log n)")
+            space_complexities.append("O(log n)")  # stack depth log n
         elif recursion_type == RecursionType.DIVIDE_CONQUER:
-            space_complexities.append("O(n)")  # Merge sort uses O(n)
+            space_complexities.append("O(n)")  # Merge sort uses O(n) array + O(log n) stack
         elif recursion_type in [RecursionType.LINEAR, RecursionType.EXPONENTIAL]:
-            space_complexities.append("O(n)")
+            space_complexities.append("O(n)")  # stack depth n
         elif recursion_type == RecursionType.FACTORIAL:
-            space_complexities.append("O(n)")  # Stack depth is n
+            space_complexities.append("O(n)")  # stack depth n (for permutations)
         
         if not space_complexities:
             return "O(1)"
@@ -392,10 +475,10 @@ class PerFunctionAnalyzer:
         if recursion_type != RecursionType.NONE:
             type_desc = {
                 RecursionType.LINEAR: "linear recursion f(n-1)",
-                RecursionType.BINARY: "binary recursion f(n/2)",
-                RecursionType.DIVIDE_CONQUER: "divide & conquer",
-                RecursionType.EXPONENTIAL: "exponential branching",
-                RecursionType.FACTORIAL: "permutation recursion"
+                RecursionType.BINARY: "logarithmic recursion f(n/2)",
+                RecursionType.DIVIDE_CONQUER: "divide & conquer branching",
+                RecursionType.EXPONENTIAL: "exponential doubling f(n-1)+f(n-2)",
+                RecursionType.FACTORIAL: "factorial branching (n-i) calls"
             }
             reasons.append(type_desc.get(recursion_type, str(recursion_type.value)))
         
@@ -406,11 +489,13 @@ class PerFunctionAnalyzer:
     
     def _analyze_generic(self):
         """Analyze non-Python code by detecting function boundaries."""
-        # Pattern for function definitions
-        func_pattern = r'(?:void|int|bool|string|double|float|auto|\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
+        # Pattern for function definitions (improved for Java/C++ modifiers)
+        # Capture: 1. modifiers, 2. return type, 3. function name, 4. parameter list
+        func_pattern = r'(?:public|private|protected|static|final|synchronized|volatile|native|abstract|void|int|bool|string|double|float|auto|[\w<>\b\[\]]+)\s+([\w\d_]+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{'
         
         lines = self.code.split('\n')
         current_func = None
+        current_params = []
         func_start = 0
         brace_depth = 0
         func_body_lines = []
@@ -420,6 +505,12 @@ class PerFunctionAnalyzer:
             
             if match and brace_depth == 0:
                 current_func = match.group(1)
+                # Parse params (crude split but effective for common types)
+                params_str = match.group(2)
+                current_params = [p.strip().split()[-1] for p in params_str.split(',') if p.strip()]
+                # remove any leading * or & for C++
+                current_params = [p.lstrip('*&') for p in current_params]
+                
                 func_start = i
                 brace_depth = line.count('{') - line.count('}')
                 func_body_lines = [line]
@@ -431,15 +522,35 @@ class PerFunctionAnalyzer:
                     # End of function
                     func_code = '\n'.join(func_body_lines)
                     analysis = self._analyze_code_block(
-                        current_func, func_code, func_start, i
+                        current_func, func_code, func_start, i, current_params
                     )
                     self.functions.append(analysis)
                     current_func = None
                     func_body_lines = []
     
     def _analyze_code_block(self, name: str, code: str, 
-                           line_start: int, line_end: int) -> FunctionComplexity:
+                           line_start: int, line_end: int, params: List[str] = None) -> FunctionComplexity:
         """Analyze a generic code block."""
+        params = params or []
+        name_lower = name.lower()
+        
+        # Determine category based on name
+        category = "General"
+        if any(w in name_lower for w in ["sort", "partition", "heapify", "swap"]):
+            category = "Sorting"
+        elif any(w in name_lower for w in ["search", "find", "binary"]):
+            category = "Searching"
+        elif any(w in name_lower for w in ["matrix", "multiply", "grid", "flood", "matrix"]):
+            category = "Matrix"
+        elif any(w in name_lower for w in ["fib", "fact", "recursive", "permute", "combination"]):
+            category = "Math/Recursion"
+        elif any(w in name_lower for w in ["dp", "lcs", "knapsack", "edit", "subsequence"]):
+            category = "Dynamic Programming"
+        elif any(w in name_lower for w in ["graph", "bfs", "dfs", "tree", "node", "topo", "dijkstra"]):
+            category = "Graph"
+        elif any(w in name_lower for w in ["queen", "sudoku", "solve", "path"]):
+            category = "Backtracking"
+
         code_lower = code.lower()
         
         # Count loops
@@ -449,9 +560,25 @@ class PerFunctionAnalyzer:
         # Estimate loop depth using brace tracking
         loop_depth = self._estimate_loop_depth(code)
         
-        # Detect recursion
-        func_calls = re.findall(rf'\b{re.escape(name)}\s*\(', code[len(name)+10:])  # Skip definition
-        recursion_calls = len(func_calls)
+        # Detect all external calls in the block and identify constant vs scaling
+        external_calls = []
+        call_matches = re.finditer(r'\b([a-zA-Z_]\w*)\s*\(([^)]*)\)', code)
+        for m in call_matches:
+            c_name = m.group(1)
+            if c_name == name: continue # skip recursion
+            args_str = m.group(2).strip()
+            # Constant if empty or only literals/digits (e.g. 8, 20, "ABC")
+            # If it contains a word that looks like a variable (n, size, len) -> scaling
+            is_const = True
+            if args_str:
+                if re.search(r'\b(n|m|k|size|len|arr|args)\b', args_str.lower()):
+                    is_const = False
+                elif not re.match(r'^[\d\s,."\'\-truefalsenull]+$', args_str.lower()):
+                    is_const = False
+            external_calls.append((c_name, is_const))
+
+        # Detect recursion (self-calls)
+        recursion_calls = len([c for c in external_calls if c[0] == name])
         
         # Check for loop in recursion context
         has_loop_in_recursion = recursion_calls > 0 and loop_count > 0
@@ -471,6 +598,19 @@ class PerFunctionAnalyzer:
             [], recursion_type, loop_depth, code
         )
         
+        # Check if param used as bound in non-python
+        uses_param_as_bound = False
+        for param in params:
+            # Check for param in for loop condition or while loop
+            if re.search(rf'for\s*\([^;]*;\s*[^;]*{re.escape(param)}|while\s*\([^)]*{re.escape(param)}', code):
+                uses_param_as_bound = True
+                break
+            # Check for param in recursive call decrement/driver
+            if recursion_calls > 0:
+                if re.search(rf'{re.escape(name)}\s*\([^)]*{re.escape(param)}', code[len(name)+5:]):
+                    uses_param_as_bound = True
+                    break
+
         reasoning = self._generate_reasoning(
             loop_depth, recursion_type, recursion_calls, time_complexity
         )
@@ -485,25 +625,39 @@ class PerFunctionAnalyzer:
             recursion_type=recursion_type,
             recursion_calls=recursion_calls,
             has_loop_in_recursion=has_loop_in_recursion,
-            reasoning=reasoning
+            reasoning=reasoning,
+            category=category,
+            external_calls=external_calls,
+            uses_param_as_bound=uses_param_as_bound
         )
     
     def _estimate_loop_depth(self, code: str) -> int:
-        """Estimate maximum nested loop depth."""
+        """
+        Estimate maximum nested loop depth with multi-language resilience.
+        Specially handles C-style code where innermost loops might omit braces.
+        """
         max_depth = 0
         current_depth = 0
         loop_starts = []
         brace_depth = 0
         
         for line in code.split('\n'):
+            line = line.strip()
+            # Loop keyword detection
             if re.search(r'\b(for|while)\s*\(', line):
-                loop_starts.append(brace_depth)
+                # We reached a nesting level
                 current_depth += 1
                 max_depth = max(max_depth, current_depth)
+                loop_starts.append(brace_depth)
             
+            # Braces detection
             brace_depth += line.count('{') - line.count('}')
             
-            while loop_starts and brace_depth <= loop_starts[-1]:
+            # UN-NESTING LOGIC:
+            # If a loop has a brace, we only pop when that brace depth is exited (<).
+            # If a loop has NO brace, it technically only lasts for the very next line of logic.
+            # Robust heuristic: pop only when brace depth decreases below the start depth.
+            while loop_starts and brace_depth < loop_starts[-1]:
                 loop_starts.pop()
                 current_depth -= 1
         
@@ -530,14 +684,29 @@ class PerFunctionAnalyzer:
             return "Very High"
     
     def _generate_summary(self, worst_time: str, worst_space: str, 
-                         worst_func: str) -> str:
+                         worst_funcs: List[str]) -> str:
         """Generate analysis summary."""
-        if len(self.functions) == 1:
-            return f"Single function with {worst_time} time complexity"
+        num_funcs = len(self.functions)
+        categories = list(set(f.category for f in self.functions if f.category != "General"))
         
+        if num_funcs == 1:
+            return f"Single-purpose implementation with {worst_time} time complexity."
+        
+        # Check for constant-bounded algorithms
+        has_collapsed = False
+        for f in self.functions:
+            if f.time_complexity in ["O(2ⁿ)", "O(n!)"]:
+                # If this function isn't in scaling driver list, it was collapsed
+                if not any(f.name == wf for wf in worst_funcs):
+                    has_collapsed = True
+                    break
+        
+        note = " (Factorial/exponential algorithms detected but constant-bounded)" if has_collapsed else ""
+        
+        cat_str = f" ({', '.join(categories)})" if categories else ""
         return (
-            f"Multiple algorithms detected ({len(self.functions)} functions). "
-            f"Worst-case: {worst_time} from '{worst_func}'"
+            f"Multiple algorithms detected{cat_str}. "
+            f"Worst-case: {worst_time} triggered by {', '.join(worst_funcs)}.{note}"
         )
 
 
@@ -557,6 +726,7 @@ def analyze_per_function(code: str) -> Dict:
                 "lineEnd": f.line_end,
                 "timeComplexity": f.time_complexity,
                 "spaceComplexity": f.space_complexity,
+                "category": f.category,
                 "loopDepth": f.loop_depth,
                 "recursionType": f.recursion_type.value,
                 "reasoning": f.reasoning

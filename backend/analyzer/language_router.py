@@ -177,20 +177,20 @@ def is_code(code: str) -> bool:
         if re.match(r'^\s*(def|function|class|public|private|protected|void|int|bool)\s+\w+', line):
             is_code_line = True
         
-        # Control structures with proper syntax
-        if re.match(r'^\s*(if|for|while|switch)\s*\(', line):
+        # Control structures (support Python style without parens)
+        if re.match(r'^\s*(if|for|while|elif|else|try|except|switch|with|match)\b', line):
             is_code_line = True
         
         # Import/include statements
-        if re.match(r'^\s*(import|from\s+\w+\s+import|#include|require|use)\s', line):
+        if re.match(r'^\s*(import|from\s+\w+\s+import|#include|require|use|package)\s', line):
             is_code_line = True
         
-        # Lines ending with code-specific patterns
-        if re.search(r'[{};]\s*$', line) or re.search(r':\s*$', line):
+        # Lines ending with code-specific patterns (colons, braces, semicolons)
+        if re.search(r'[{};:]\s*$', line):
             is_code_line = True
         
         # Assignment with operators
-        if re.search(r'\s*(=|==|!=|<=|>=|\+=|-=)\s*', line) and re.search(r'[a-z_]\w*\s*=', line, re.IGNORECASE):
+        if re.search(r'\s*(=|==|!=|<=|>=|\+=|-=|\*=|/=|//=)\s*', line) and re.search(r'[a-z_]\w*\s*(=|\+=)', line, re.IGNORECASE):
             is_code_line = True
         
         # Count the line
