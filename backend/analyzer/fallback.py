@@ -100,7 +100,11 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
     pattern = PatternAnalyzer(code, static).detect()
     
     # COMPLEXITY ORDERING (Internal helper)
-    ORDER = {"O(1)": 0, "O(log n)": 1, "O(√n)": 2, "O(n)": 3, "O(n log n)": 4, "O(n²)": 5, "O(n³)": 6, "O(2ⁿ)": 7, "O(n!)": 8}
+    ORDER = {
+        "O(1)": 0, "O(log n)": 1, "O(√n)": 2, "O(n)": 3, "O(V + E)": 3,
+        "O(n log n)": 4, "O(E log V)": 4, "O(n²)": 5, "O(V²)": 5, "O(n³)": 6, 
+        "O(2ⁿ)": 7, "O(n!)": 8
+    }
     
     if pattern and PatternConfidence.is_confident(pattern, code, static):
         p_time, p_space = resolve_complexity(pattern)

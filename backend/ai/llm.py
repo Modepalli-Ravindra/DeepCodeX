@@ -98,16 +98,13 @@ Do not include explanations, introductions, or over-promises.
 
     # ---- SANITIZE OUTPUT ----
     suggestions = []
+    garbage = ["<s>", "</s>", "[INST]", "[/INST]", "[OUT]", "System:", "AI:", "Output:"]
     for line in content.splitlines():
         line = line.strip()
-        if not line:
-            continue
-
-        # Remove bullets, numbering, dashes
-        line = line.lstrip("-•*0123456789. ").strip()
-
-        if len(line) > 5:
-            suggestions.append(line)
+        if not line: continue
+        for token in garbage: line = line.replace(token, "")
+        line = line.strip().lstrip("-•*0123456789. ").strip()
+        if len(line) > 10: suggestions.append(line)
 
     if not suggestions:
         raise RuntimeError("No valid suggestions generated")

@@ -201,18 +201,15 @@ class PatternAnalyzer:
 
     def _is_dfs(self) -> bool:
         """Recursive or stack-based graph traversal."""
-        return (
-            self.static.get("hasRecursion", False)
-            and re.search(r"visited|seen", self.code)
-            and re.search(r"adj|graph|neighbor", self.code)
-        )
+        has_vis = re.search(r"visited|seen|used|marked|is_visited|found", self.code)
+        has_adj = re.search(r"adj|graph|neighbor|edges|connection|link", self.code)
+        return self.static.get("hasRecursion", False) and has_vis and has_adj
 
     def _is_graph_traversal(self) -> bool:
         """Generic graph traversal (BFS/DFS)."""
-        return (
-            re.search(r"graph|adj", self.code)
-            and re.search(r"visited|seen", self.code)
-        )
+        has_vis = re.search(r"visited|seen|used|marked", self.code)
+        has_adj = re.search(r"graph|adj|edges|nodes", self.code)
+        return has_vis and has_adj
 
     # ================== SORTING ALGORITHMS ==================
 

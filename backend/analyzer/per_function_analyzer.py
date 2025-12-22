@@ -66,14 +66,16 @@ class PerFunctionAnalyzer:
     Never mixes functions. Never multiplies complexities.
     """
     
-    # Complexity ordering for comparison
     COMPLEXITY_ORDER = {
         "O(1)": 0,
         "O(log n)": 1,
         "O(√n)": 2,
         "O(n)": 3,
+        "O(V + E)": 3,
         "O(n log n)": 4,
+        "O(E log V)": 4,
         "O(n²)": 5,
+        "O(V²)": 5,
         "O(n³)": 6,
         "O(2ⁿ)": 7,
         "O(n!)": 8,
@@ -333,18 +335,28 @@ class PerFunctionAnalyzer:
         
         # 1. FACTORIAL pattern: recursive call INSIDE a loop (branching factor grows with n)
         if recursion_calls >= 1 and has_loop:
-            # Look for common loop motifs in factorial/backtracking
-            if re.search(r'for\s+\w+\s+in\s+range|for\s*\(.*;\s*.*;\s*.*\)', code_lower):
+            # HEURISTIC: Graph Traversal check
+            # If we see visited check or adj list, and NO backtracking (undoing state), it's just DFS.
+            is_graph = any(w in code_lower for w in ["visited", "seen", "adj", "neighbor", "edge", "graph"])
+            # Backtracking check: Look for removing/popping or resetting visited to false
+            has_backtrack = any(w in code_lower for w in ["remove", "pop", "undo", "visited["] and ("false" in code_lower or "null" in code_lower or "0" in code_lower))
+            
+            if re.search(r'for\s+\w+\s+in\s+range|for\s*\(.*;\s*.*;\s*.*\)|for\s*\(.*\s*:\s*.*\)', code_lower):
+                if is_graph and not has_backtrack:
+                    return RecursionType.LINEAR # DFS is structurally linear in V+E
                 return RecursionType.FACTORIAL
         
         # 2. EXPONENTIAL pattern: multiple recursive calls NOT inside a loop
         if recursion_calls >= 2:
-            # f(n-1) + f(n-2)
-            if re.search(rf'{func_name}\s*\([^)]*-\s*1[^)]*\).*{func_name}\s*\([^)]*-\s*2', code):
-                return RecursionType.EXPONENTIAL
-            # If no divide-conquer signs, it's likely exponential
-            if not re.search(r'/\s*2|//\s*2|>>\s*1|mid|left|right', code_lower):
-                return RecursionType.EXPONENTIAL
+            # Look for bifurcating calls: f(n-1) and f(n-2) or multiple calls to self
+            matches = re.findall(rf'{re.escape(func_name)}\s*\(', code)
+            if len(matches) >= 2:
+                # f(n-1) + f(n-2) pattern
+                if re.search(rf'{re.escape(func_name)}.*-\s*1.*{re.escape(func_name)}.*-\s*2', code, re.DOTALL):
+                    return RecursionType.EXPONENTIAL
+                # General branching factor (not in loop)
+                if not re.search(r'/\s*2|//\s*2|>>\s*1|mid|left|right', code_lower):
+                    return RecursionType.EXPONENTIAL
         
         # 3. DIVIDE_CONQUER pattern
         if (re.search(r'/\s*2|//\s*2|>>\s*1', code) or re.search(r'mid|pivot|partition', code_lower)):
@@ -475,13 +487,17 @@ class PerFunctionAnalyzer:
         
         if recursion_type != RecursionType.NONE:
             type_desc = {
-                RecursionType.LINEAR: "linear recursion f(n-1)",
+                RecursionType.LINEAR: "linear recursion",
                 RecursionType.BINARY: "logarithmic recursion f(n/2)",
                 RecursionType.DIVIDE_CONQUER: "divide & conquer branching",
                 RecursionType.EXPONENTIAL: "exponential doubling f(n-1)+f(n-2)",
-                RecursionType.FACTORIAL: "factorial branching (n-i) calls"
+                RecursionType.FACTORIAL: "factorial branching (backtracking)"
             }
             reasons.append(type_desc.get(recursion_type, str(recursion_type.value)))
+        
+        # Add Graph context if detected
+        if any(w in reasons[-1].lower() if reasons else "" for w in ["linear", "nested"]) and "visited" in code.lower():
+            reasons.append("graph traversal structure O(V+E)")
         
         if not reasons:
             reasons.append("constant-time operations")
@@ -690,24 +706,23 @@ class PerFunctionAnalyzer:
         num_funcs = len(self.functions)
         categories = list(set(f.category for f in self.functions if f.category != "General"))
         
-        if num_funcs == 1:
-            return f"Single-purpose implementation with {worst_time} time complexity."
-        
         # Check for constant-bounded algorithms
         has_collapsed = False
+        collapsed_info = ""
         for f in self.functions:
-            if f.time_complexity in ["O(2ⁿ)", "O(n!)"]:
-                # If this function isn't in scaling driver list, it was collapsed
-                if not any(f.name == wf for wf in worst_funcs):
+            if f.time_complexity in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]:
+                if not any(f.name == wf for wf in worst_funcs) or worst_time == "O(1)":
                     has_collapsed = True
+                    collapsed_info = f" (Intrinsic {f.time_complexity} collapsed to O(1) due to constant bounds)"
                     break
         
-        note = " (Factorial/exponential algorithms detected but constant-bounded)" if has_collapsed else ""
-        
+        if num_funcs == 1:
+            return f"Single-purpose implementation. {worst_time} time complexity{collapsed_info if has_collapsed else ''}."
+            
         cat_str = f" ({', '.join(categories)})" if categories else ""
         return (
             f"Multiple algorithms detected{cat_str}. "
-            f"Worst-case: {worst_time} triggered by {', '.join(worst_funcs)}.{note}"
+            f"Worst-case: {worst_time} triggered by {', '.join(worst_funcs)}.{collapsed_info if has_collapsed else ''}"
         )
 
 
