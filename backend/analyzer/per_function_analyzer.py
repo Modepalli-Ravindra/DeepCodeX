@@ -44,8 +44,9 @@ class FunctionComplexity:
     data_structures: List[str] = field(default_factory=list)
     reasoning: str = ""
     category: str = "General"
-    external_calls: List[Tuple[str, bool]] = field(default_factory=list)  # (name, is_constant_call)
+    external_calls: List[Tuple[str, bool, str]] = field(default_factory=list)  # (name, is_constant_call, args_str)
     uses_param_as_bound: bool = False
+    code: str = "" # Full code of the function for second-pass analysis
 
 
 @dataclass
@@ -103,13 +104,28 @@ class PerFunctionAnalyzer:
             ))
         
         # Phase 2: Global Effective Complexity Analysis
+        # Track which variables are literals (constant sources)
+        literal_vars = set()
+        for f in self.functions:
+            # Simple heuristic for literal assignment in 'main'
+            assigns = re.findall(r'\b(?:int|let|const|var|static\s+int)\s+([a-zA-Z_]\w*)\s*=\s*[\d"\'truefalsenull]+', f.code)
+            for v in assigns: literal_vars.add(v)
+
         called_with_scaling = set()
         for f in self.functions:
-            for name, is_const in f.external_calls:
-                if not is_const:
+            for name, is_const, args in f.external_calls:
+                # A call is scaling ONLY if args contains a variable NOT in literal_vars
+                actual_scaling = not is_const
+                if not is_const and args:
+                    # check if the variables in args are all literals/constant-sourced
+                    arg_vars = re.findall(r'\b([a-zA-Z_]\w*)\b', args)
+                    if arg_vars and all(v in literal_vars for v in arg_vars):
+                        actual_scaling = False
+                
+                if actual_scaling:
                     called_with_scaling.add(name)
         
-        # Compute worst-case among INTRINSIC complexities
+        # Compute Intrinsic Worst Case (Structural potential)
         intrinsic_times = [f.time_complexity for f in self.functions]
         intrinsic_worst_time = self._get_worst_complexity(intrinsic_times)
         
@@ -118,6 +134,7 @@ class PerFunctionAnalyzer:
             is_entry = f.name == "main" or f.name.startswith("run_")
             is_scaling = f.name in called_with_scaling
             
+            # COLLAPSE RULE: Demo code called with constants is O(1) effectively
             should_collapse = False
             if f.time_complexity in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]:
                 if not is_scaling and not is_entry and not f.uses_param_as_bound:
@@ -128,12 +145,12 @@ class PerFunctionAnalyzer:
             else:
                 effective_times.append((f.name, f.time_complexity))
 
-        # Compute worst-case among EFFECTIVE complexities
+        # Compute program-level effective worst case
         effective_worst_time = self._get_worst_complexity([et[1] for et in effective_times])
         
-        # DUAL-MODE LOGIC:
-        # If effective is O(1) but intrinsic is higher, and it's a small demo file:
-        # Prioritize showing the Intrinsic truth.
+        # DUAL-MODE RESOLUTION:
+        # For small demo files (single-purpose), the Intrinsic Complexity is the 'Truth'.
+        # For larger systems, the Effective Complexity is the 'Reality'.
         if effective_worst_time == "O(1)" and intrinsic_worst_time != "O(1)":
             worst_time = intrinsic_worst_time
             is_collapsed_demo = True
@@ -263,8 +280,9 @@ class PerFunctionAnalyzer:
                                     self.uses_param_as_bound = True
                     else:
                         # Detect if call is constant-bounded (literal arguments)
+                        args_str = ", ".join([ast.dump(arg) for arg in n.args])
                         is_constant = len(n.args) > 0 and all(isinstance(arg, (ast.Constant, ast.Num, ast.Str, ast.Bytes, ast.NameConstant)) for arg in n.args)
-                        self.external_calls.append((n.func.id, is_constant))
+                        self.external_calls.append((n.func.id, is_constant, args_str))
                 self.generic_visit(n)
             
             def visit_List(self, n):
@@ -322,7 +340,8 @@ class PerFunctionAnalyzer:
             data_structures=data_structures,
             reasoning=reasoning,
             external_calls=visitor.external_calls,
-            uses_param_as_bound=visitor.uses_param_as_bound
+            uses_param_as_bound=visitor.uses_param_as_bound,
+            code=func_code
         )
     
     def _classify_recursion(self, code: str, func_name: str, 
@@ -341,17 +360,16 @@ class PerFunctionAnalyzer:
         
         code_lower = code.lower()
         
-        # 1. FACTORIAL pattern: recursive call INSIDE a loop (branching factor grows with n)
+        # 1. GRAPH TRAVERSAL vs FACTORIAL check
         if recursion_calls >= 1 and has_loop:
-            # HEURISTIC: Graph Traversal check
-            # If we see visited check or adj list, and NO backtracking (undoing state), it's just DFS.
-            is_graph = any(w in code_lower for w in ["visited", "seen", "adj", "neighbor", "edge", "graph"])
-            # Backtracking check: Look for removing/popping or resetting visited to false
-            has_backtrack = any(w in code_lower for w in ["remove", "pop", "undo", "visited["] and ("false" in code_lower or "null" in code_lower or "0" in code_lower))
+            is_graph = any(w in code_lower for w in ["visited", "seen", "adj", "neighbor", "edge", "graph", "marked", "is_visited"])
+            has_backtrack = any(w in code_lower for w in ["remove", "pop", "undo", "visited["] and ("false" in code_lower or "null" in code_lower or "0" in code_lower or "none" in code_lower))
+            
+            # Graph traversals like DFS/BFS are O(V+E), not factorial
+            if is_graph and not has_backtrack:
+                return RecursionType.LINEAR # DFS search space is linear in V+E
             
             if re.search(r'for\s+\w+\s+in\s+range|for\s*\(.*;\s*.*;\s*.*\)|for\s*\(.*\s*:\s*.*\)', code_lower):
-                if is_graph and not has_backtrack:
-                    return RecursionType.LINEAR # DFS is structurally linear in V+E
                 return RecursionType.FACTORIAL
         
         # 2. EXPONENTIAL pattern: multiple recursive calls NOT inside a loop
@@ -604,7 +622,7 @@ class PerFunctionAnalyzer:
                     is_const = False
                 elif not re.match(r'^[\d\s,."\'\-truefalsenull]+$', args_str.lower()):
                     is_const = False
-            external_calls.append((c_name, is_const))
+            external_calls.append((c_name, is_const, args_str))
 
         # Detect recursion (self-calls)
         recursion_calls = len([c for c in external_calls if c[0] == name])
@@ -640,6 +658,16 @@ class PerFunctionAnalyzer:
                     uses_param_as_bound = True
                     break
 
+        # CATEGORY OVERRIDE for Tree/Graph (O(V+E) or O(log n))
+        if category == "Graph" and time_complexity == "O(n²)":
+            time_complexity = "O(V + E)"
+        elif category == "Graph" and time_complexity == "O(n³)":
+            time_complexity = "O(V³)"
+        elif category == "Searching" and "binary" in name_lower:
+            time_complexity = "O(log n)"
+        elif category == "Searching" and ("search" in name_lower or "find" in name_lower) and "tree" in code_lower:
+            time_complexity = "O(log n)" # BST average search
+
         reasoning = self._generate_reasoning(
             loop_depth, recursion_type, recursion_calls, time_complexity, code
         )
@@ -657,7 +685,8 @@ class PerFunctionAnalyzer:
             reasoning=reasoning,
             category=category,
             external_calls=external_calls,
-            uses_param_as_bound=uses_param_as_bound
+            uses_param_as_bound=uses_param_as_bound,
+            code=code
         )
     
     def _estimate_loop_depth(self, code: str) -> int:
