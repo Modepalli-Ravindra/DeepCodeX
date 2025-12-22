@@ -85,7 +85,66 @@ const LANGUAGE_PATTERNS: { pattern: RegExp; lang: LanguageInfo }[] = [
   },
 ];
 
+const isPlainText = (code: string): boolean => {
+  // Check if the content is prose/natural language rather than code
+  const lines = code.trim().split('\n').filter(l => l.trim());
+
+  if (lines.length < 2) {
+    // Very short - check for obvious code patterns
+    const text = code.trim();
+    if (/^(def|function|class|public|private)\s+\w+/.test(text)) return false;
+    if (/[{};]\s*$/.test(text)) return false;
+    return true;
+  }
+
+  let proseLines = 0;
+  let codeLines = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Prose indicators
+    const isProse =
+      // Sentence-like (starts capital, ends punctuation)
+      /^[A-Z][a-zA-Z\s,'"]+[.!?]$/.test(trimmed) ||
+      // Common prose phrases (but not on lines with code structure)
+      (!/[=\[\]{}();]/.test(trimmed) && /\b(your|you're|what's|here's|that's|it's|how to|this is|problem|issue)\b/i.test(trimmed)) ||
+      // Bullet points or emojis
+      /^[•\-\*✅❌]\s+/.test(trimmed) ||
+      // ALLCAPS headers
+      /^[A-Z][A-Z\s]+$/.test(trimmed) ||
+      // Short word-only lines (not code keywords)
+      (trimmed.length < 30 && /^[a-zA-Z\s]+$/.test(trimmed) && !/^(if|for|while|def|class|return|import|from)\s/.test(trimmed));
+
+    // Code indicators
+    const isCode =
+      /^\s*(def|function|class|public|private|void|int|bool)\s+\w+/.test(trimmed) ||
+      /^\s*(if|for|while|switch)\s*\(/.test(trimmed) ||
+      /^\s*(import|from\s+\w+\s+import|#include|require)\s/.test(trimmed) ||
+      /[{};]\s*$/.test(trimmed) ||
+      /=/.test(trimmed) && /[a-z_]\w*\s*=/i.test(trimmed);
+
+    if (isProse && !isCode) proseLines++;
+    else if (isCode && !isProse) codeLines++;
+  }
+
+  // If 40%+ are prose lines, it's plain text
+  const total = proseLines + codeLines;
+  if (total > 0) {
+    return proseLines / total > 0.4;
+  }
+
+  // Default: no clear structure = plain text
+  return lines.length > 3 && code.match(/[{};]/g)?.length < 3;
+};
+
 const detectLanguage = (code: string): LanguageInfo => {
+  // FIRST: Check if it's plain text
+  if (isPlainText(code)) {
+    return { name: "Plain Text", monacoId: "plaintext", icon: "📄", color: "#6B7280" };
+  }
+
+  // Then check language patterns
   for (const { pattern, lang } of LANGUAGE_PATTERNS) {
     if (pattern.test(code)) {
       return lang;
