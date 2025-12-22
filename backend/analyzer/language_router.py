@@ -16,6 +16,10 @@ def detect_language(code: str) -> str:
     - Java uses `public class` (modifier before keyword)
     """
     
+    # FIRST: Check if it's plain text (not code)
+    if not is_code(code):
+        return "Plain Text"
+    
     # ---------- C++ (check BEFORE Java - has public: vs public class) ----------
     if re.search(r'#include\s*<(iostream|vector|string|algorithm|map|set|queue|stack|cstdlib|cstring|cmath)>', code):
         return "C++"
@@ -95,10 +99,6 @@ def detect_language(code: str) -> str:
     if re.search(r'<\?php|\$\w+\s*=|echo\s+[\'"\$]|\$this->', code):
         return "PHP"
     
-    # Check if it's actually code or just plain text
-    if not is_code(code):
-        return "Plain Text"
-    
     return "Generic"
 
 
@@ -106,96 +106,149 @@ def is_code(code: str) -> bool:
     """
     Detect if the input is actual code or just plain text.
     Returns True if code patterns are found, False otherwise.
+    
+    KEY INSIGHT: If text has embedded code snippets but is mostly prose,
+    it should be considered text (like documentation or tutorials).
     """
     if not code or not code.strip():
         return False
     
-    # Code indicators - if ANY of these are present, it's likely code
-    code_patterns = [
-        # Function definitions
-        r'\bdef\s+\w+\s*\(',          # Python
-        r'\bfunction\s+\w+\s*\(',     # JavaScript
-        r'\b(public|private|protected)\s+',  # Java/C++
-        r'\bvoid\s+\w+\s*\(',         # C/C++/Java
-        r'\bint\s+\w+\s*\(',          # C/C++
-        r'\bfn\s+\w+\s*\(',           # Rust
-        r'\bfunc\s+\w+\s*\(',         # Go
-        
-        # Variable declarations
-        r'\b(var|let|const)\s+\w+\s*=',  # JS/TS
-        r'\bint\s+\w+\s*=',              # C/C++/Java
-        r'\bstr\s+\w+\s*=',              # Various
-        r'\$\w+\s*=',                    # PHP
-        
-        # Control structures
-        r'\bif\s*\(.+\)\s*\{',        # C-style if
-        r'\bfor\s*\(.+\)\s*\{',       # C-style for
-        r'\bwhile\s*\(.+\)\s*\{',     # C-style while
-        r'\bfor\s+\w+\s+in\s+',       # Python for
-        r'\bif\s+.+:',                # Python if
-        
-        # Imports/Includes
-        r'#include\s*<',              # C/C++
-        r'\bimport\s+\w+',            # Python/Java/JS
-        r'\bfrom\s+\w+\s+import',     # Python
-        r'\brequire\s*\(',            # JS/Ruby
-        r'\buse\s+\w+::',             # Rust
-        
-        # Class definitions
-        r'\bclass\s+\w+',             # Most languages
-        r'\bstruct\s+\w+',            # C/C++/Rust
-        r'\binterface\s+\w+',         # Java/TS
-        
-        # Common code patterns
-        r'\breturn\s+',               # Return statements
-        r'[;{}]',                     # Braces and semicolons
-        r'=>',                        # Arrow functions
-        r'->',                        # Arrow operators (PHP, Rust)
-        r'::',                        # Scope resolution
-        r'\[\s*\w*\s*\]',             # Array access
-        r'\w+\s*\(\s*\)',             # Function calls
-        r'!=|==|<=|>=|&&|\|\|',       # Comparison operators
-        r'\+=|-=|\*=|/=',             # Compound assignment
-        
-        # Comments (strong indicator of code)
-        r'//.*$',                     # Single-line comment
-        r'/\*.*\*/',                  # Multi-line comment
-        r'#.*$',                      # Hash comment (but check it's not just hashtags)
-    ]
-    
-    # Count how many code patterns match
-    matches = 0
-    for pattern in code_patterns:
-        if re.search(pattern, code, re.MULTILINE):
-            matches += 1
-    
-    # If we have at least 2 code patterns, it's likely code
-    if matches >= 2:
-        return True
-    
-    # Additional check: code usually has specific structural elements
     lines = code.strip().split('\n')
+    non_empty_lines = [l.strip() for l in lines if l.strip()]
     
-    # Check for indentation patterns (common in Python, significant in structured code)
-    has_indentation = any(line.startswith('    ') or line.startswith('\t') for line in lines if line.strip())
-    
-    # Check for common code line endings
-    has_code_endings = any(line.rstrip().endswith(('{', '}', ';', ':', ')', ',')) for line in lines if line.strip())
-    
-    # If has indentation AND code patterns OR code endings, it's code
-    if has_indentation and (matches >= 1 or has_code_endings):
-        return True
-    
-    # Check ratio of special characters (code has more)
-    total_chars = len(code.replace(' ', '').replace('\n', ''))
-    if total_chars == 0:
+    if len(non_empty_lines) < 2:
+        # Very short - check for basic code patterns
+        text = code.strip()
+        if re.search(r'^(def|function|class|public|private)\s+\w+', text):
+            return True
         return False
     
-    special_chars = len(re.findall(r'[{}\[\]();:=<>!&|+\-*/%]', code))
-    special_ratio = special_chars / total_chars
+    # ============================================
+    # COUNT PROSE vs CODE LINES
+    # ============================================
     
-    # Code typically has >5% special characters
-    if special_ratio > 0.05 and matches >= 1:
+    prose_lines = 0
+    code_lines = 0
+    
+    for line in non_empty_lines:
+        is_prose = False
+        is_code_line = False
+        
+        # === STRONG PROSE INDICATORS ===
+        
+        # Sentence-like (starts capital, ends punctuation, has spaces)
+        if re.match(r'^[A-Z][a-zA-Z\s,\'"]+[.!?]$', line) and ' ' in line:
+            is_prose = True
+        
+        # Contains common prose phrases
+        # NOTE: Avoid matching common variable names (right, left, method)
+        prose_phrases = [
+            r'\b(your|you\'re|what\'s|here\'s|that\'s|it\'s|there\'s)\b',
+            r'\b(how to|what is|this is|to solve|the problem|the issue)\b',
+            r'\b(because|therefore|however|although|instead)\b',
+            r'\b(example|tutorial|learn|understand|explain)\b',
+        ]
+        # Only check prose phrases if line doesn't have obvious code structure
+        if not re.search(r'[=\[\]{}();]', line):
+            for phrase in prose_phrases:
+                if re.search(phrase, line.lower()):
+                    is_prose = True
+                    break
+        
+        # Bullet points or numbered lists
+        if re.match(r'^[•\-\*✅❌]\s+', line) or re.match(r'^\d+\.\s+[A-Z]', line):
+            is_prose = True
+        
+        # Headers (ALLCAPS or Title Case without code)
+        if re.match(r'^[A-Z][A-Z\s]+$', line) or re.match(r'^[A-Z][a-z]+(\s+[A-Z][a-z]+)+$', line):
+            is_prose = True
+        
+        # Lines with complexity notation in prose (O(n), O(n²))
+        if re.search(r'O\([^\)]+\)', line) and not re.search(r'[{};=]', line):
+            is_prose = True
+        
+        # Short lines that are just words (not code)
+        if len(line) < 30 and re.match(r'^[a-zA-Z\s]+$', line) and not re.match(r'^(if|for|while|def|class|return|import|from)\s', line):
+            is_prose = True
+        
+        # === STRONG CODE INDICATORS ===
+        
+        # Function/class definitions
+        if re.match(r'^\s*(def|function|class|public|private|protected|void|int|bool)\s+\w+', line):
+            is_code_line = True
+        
+        # Control structures with proper syntax
+        if re.match(r'^\s*(if|for|while|switch)\s*\(', line):
+            is_code_line = True
+        
+        # Import/include statements
+        if re.match(r'^\s*(import|from\s+\w+\s+import|#include|require|use)\s', line):
+            is_code_line = True
+        
+        # Lines ending with code-specific patterns
+        if re.search(r'[{};]\s*$', line) or re.search(r':\s*$', line):
+            is_code_line = True
+        
+        # Assignment with operators
+        if re.search(r'\s*(=|==|!=|<=|>=|\+=|-=)\s*', line) and re.search(r'[a-z_]\w*\s*=', line, re.IGNORECASE):
+            is_code_line = True
+        
+        # Count the line
+        if is_prose and not is_code_line:
+            prose_lines += 1
+        elif is_code_line and not is_prose:
+            code_lines += 1
+        elif is_prose and is_code_line:
+            # Ambiguous - slight preference for prose if it has prose phrases
+            if any(re.search(p, line.lower()) for p in prose_phrases):
+                prose_lines += 1
+            else:
+                code_lines += 1
+    
+    total_classified = prose_lines + code_lines
+    
+    # If we classified most lines
+    if total_classified >= len(non_empty_lines) * 0.5:
+        prose_ratio = prose_lines / max(total_classified, 1)
+        
+        # If more than 40% are prose, it's likely text with code snippets
+        if prose_ratio > 0.4:
+            return False
+        
+        # If more than 60% are code, it's likely code
+        if prose_ratio < 0.2:
+            return True
+    
+    # ============================================
+    # FALLBACK: STRUCTURAL ANALYSIS
+    # ============================================
+    
+    # Count structural elements
+    brace_count = code.count('{') + code.count('}')
+    semicolon_count = code.count(';')
+    colon_count = len(re.findall(r':\s*$', code, re.MULTILINE))
+    
+    # Strong structural indicators = definitely code
+    if brace_count >= 6 and semicolon_count >= 4:
         return True
     
-    return False
+    # Check for proper indentation blocks (Python-style)
+    indented_lines = sum(1 for l in lines if l.startswith('    ') or l.startswith('\t'))
+    if indented_lines >= 3 and colon_count >= 2:
+        return True
+    
+    # Check ratio of special characters
+    total_chars = len(code.replace(' ', '').replace('\n', ''))
+    if total_chars > 0:
+        special_chars = len(re.findall(r'[{}\[\]();:=<>!&|+\-*/]', code))
+        special_ratio = special_chars / total_chars
+        
+        # Very high special char ratio with structure
+        if special_ratio > 0.10 and (brace_count >= 4 or semicolon_count >= 3):
+            return True
+    
+    # Default: if we couldn't determine, and there's little structure, it's text
+    if brace_count < 4 and semicolon_count < 3 and code_lines < 3:
+        return False
+    
+    return code_lines > prose_lines
