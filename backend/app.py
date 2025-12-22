@@ -10,7 +10,7 @@ from analyzer.language_router import detect_language
 from auth.auth import auth_bp
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 app.register_blueprint(auth_bp, url_prefix="/auth")
 
