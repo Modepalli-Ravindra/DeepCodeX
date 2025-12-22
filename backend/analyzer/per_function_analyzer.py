@@ -109,38 +109,46 @@ class PerFunctionAnalyzer:
                 if not is_const:
                     called_with_scaling.add(name)
         
+        # Compute worst-case among INTRINSIC complexities
+        intrinsic_times = [f.time_complexity for f in self.functions]
+        intrinsic_worst_time = self._get_worst_complexity(intrinsic_times)
+        
         effective_times = []
         for f in self.functions:
             is_entry = f.name == "main" or f.name.startswith("run_")
             is_scaling = f.name in called_with_scaling
             
-            # CORE RULE: Symbolic Collapse only applies to Exponential/Factorial demo code.
-            # Scaling drivers like O(n³) or O(n²) should be reported if they are the primary logic.
-            # A function is 'Effective' O(1) ONLY if it's a high-complexity demo called with constants.
-            
             should_collapse = False
-            if f.time_complexity in ["O(2ⁿ)", "O(n!)"]:
+            if f.time_complexity in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]:
                 if not is_scaling and not is_entry and not f.uses_param_as_bound:
                     should_collapse = True
             
             if should_collapse:
                 effective_times.append((f.name, "O(1)"))
             else:
-                # If it's a scaling driver (O(n³), O(n²)) or actually called with symbols, it's effective.
                 effective_times.append((f.name, f.time_complexity))
 
         # Compute worst-case among EFFECTIVE complexities
-        # STRICT RULE: MAX(Big-O) is the only source of worst-case truth.
-        worst_time = self._get_worst_complexity([et[1] for et in effective_times])
+        effective_worst_time = self._get_worst_complexity([et[1] for et in effective_times])
         
+        # DUAL-MODE LOGIC:
+        # If effective is O(1) but intrinsic is higher, and it's a small demo file:
+        # Prioritize showing the Intrinsic truth.
+        if effective_worst_time == "O(1)" and intrinsic_worst_time != "O(1)":
+            worst_time = intrinsic_worst_time
+            is_collapsed_demo = True
+        else:
+            worst_time = effective_worst_time
+            is_collapsed_demo = False
+
         effective_spaces = []
         for f in self.functions:
             effective_spaces.append((f.name, f.space_complexity))
                 
         worst_space = self._get_worst_complexity([es[1] for es in effective_spaces])
         
-        # Consistent Driver Attribution: Prioritize the highest asymptotic order
-        worst_time_funcs = [et[0] for et in effective_times if et[1] == worst_time]
+        # Consistent Driver Attribution
+        worst_time_funcs = [f.name for f in self.functions if f.time_complexity == worst_time]
         if len(worst_time_funcs) > 1 and "main" in worst_time_funcs:
             worst_time_funcs.remove("main")
             
@@ -418,6 +426,9 @@ class PerFunctionAnalyzer:
             # Check for logarithmic loop (i *= 2, i /= 2, i >>= 1)
             if re.search(r'\*=\s*2|/=\s*2|//=\s*2|>>=\s*1|\b\w+\s*=\s*\w+\s*\*|/\s*2', code):
                 return "O(log n)"
+            # Square root loop (i*i <= n or sqrt(n))
+            if re.search(r'sqrt\s*\(|i\s*\*\s*i\s*<=|i\s*\*\s*i\s*<', code):
+                return "O(√n)"
             return "O(n)"
         
         if loop_depth == 2:
