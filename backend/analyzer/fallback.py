@@ -1,29 +1,29 @@
 from ai.llm import get_live_suggestions
-from analyzer.complexity_rules import estimate_big_o
 from analyzer.pattern_analyzer import PatternAnalyzer
 from analyzer.pattern_confidence import PatternConfidence
 from analyzer.complexity_map import resolve_complexity
-from analyzer.universal_analyzer import analyze_with_formula
+from analyzer.per_function_analyzer import analyze_per_function
 
 
 # ==========================================================
 # REAL, STATIC, DATA-DRIVEN SCORING LOGIC
 # ==========================================================
 
-def complexity_level(static: dict) -> str:
-    score = 0
-    score += static.get("cyclomaticComplexity", 1)
-    score += static.get("maxLoopDepth", 0) * 2
-    if static.get("hasRecursion"):
-        score += 3
-    if static.get("multiRecursion"):
-        score += 5
-
-    if score <= 6:
+def complexity_level_from_worst(worst_time: str) -> str:
+    """Get complexity level based on worst-case time."""
+    order = {
+        "O(1)": 0, "O(log n)": 1, "O(√n)": 2, "O(n)": 3,
+        "O(n log n)": 4, "O(n²)": 5, "O(n³)": 6, "O(2ⁿ)": 7, "O(n!)": 8
+    }
+    level = order.get(worst_time, 3)
+    
+    if level <= 1:
         return "Low"
-    if score <= 14:
+    elif level <= 4:
         return "Medium"
-    return "High"
+    elif level <= 6:
+        return "High"
+    return "Very High"
 
 
 def refactor_percentage(static: dict) -> int:
@@ -75,45 +75,37 @@ def quality_score(static: dict) -> int:
 
 
 # ==========================================================
-# FINAL ANALYSIS PIPELINE (WITH UNIVERSAL FORMULA)
+# FINAL ANALYSIS PIPELINE (HYBRID APPROACH)
 # ==========================================================
 
 def analyze_with_fallback(code: str, static: dict) -> dict:
     """
-    Multi-layer analysis pipeline:
-    1. Pattern Recognition (known algorithms)
-    2. Universal Formula Analysis (line-by-line classification)
-    3. Rule-based Fallback
+    HYBRID APPROACH:
+    1. First try Pattern Recognition (for known algorithms like BFS, binary search)
+    2. If pattern found with high confidence, use its known complexity
+    3. Otherwise, use per-function analysis for accurate results
+    4. Always use MAX (not multiply) for worst-case
     """
     
-    # Layer 1: Pattern Recognition
+    # Layer 1: Pattern Recognition (for known algorithms)
     pattern = PatternAnalyzer(code, static).detect()
-    formula_result = None
     
     if pattern and PatternConfidence.is_confident(pattern, code, static):
+        # Known algorithm detected - use authoritative complexity
         time_complexity, space_complexity = resolve_complexity(pattern)
-        analysis_engine = f"Pattern Engine: {pattern}"
+        engine = f"Pattern Engine: {pattern}"
+        per_func_result = None
     else:
-        # Layer 2: Universal Formula Analysis
-        # T(n) = max{f₁(n), f₂(n), ..., fₗ(n)}
-        # S(n) = max{g₁(n), g₂(n), ..., gₗ(n)}
-        try:
-            formula_result = analyze_with_formula(code)
-            time_complexity = formula_result["timeComplexity"]
-            space_complexity = formula_result["spaceComplexity"]
-            analysis_engine = "Universal Formula Engine"
-        except Exception:
-            # Layer 3: Fallback to simple rules
-            time_complexity, space_complexity = estimate_big_o(
-                loop_count=static.get("loopCount", 0),
-                dynamic_allocations=static.get("dynamicAllocations", 0),
-                max_loop_depth=static.get("maxLoopDepth", 0),
-                has_log_loop=static.get("hasLogLoop", False),
-                has_recursion=static.get("hasRecursion", False),
-                multi_recursion=static.get("multiRecursion", False),
-            )
-            analysis_engine = "Rule-based Engine"
-
+        # Layer 2: Per-function analysis (correct approach for multi-function code)
+        per_func_result = analyze_per_function(code)
+        time_complexity = per_func_result.get("worstTime", "O(n)")
+        space_complexity = per_func_result.get("worstSpace", "O(1)")
+        engine = "Per-Function Analyzer"
+    
+    # Get complexity level from worst-case
+    level = complexity_level_from_worst(time_complexity)
+    
+    # Get suggestions
     try:
         suggestions = get_live_suggestions(code, static)
     except Exception:
@@ -123,34 +115,34 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
             "Split large functions into smaller units.",
         ]
 
+    # Build result
     result = {
         "language": static.get("language", "Auto"),
-        "engine": analysis_engine,
+        "engine": engine,
         "metrics": {
             "linesOfCode": static.get("linesOfCode", 0),
-            "functionCount": static.get("functionCount", 0),
+            "functionCount": static.get("functionCount", 1),
             "loopCount": static.get("loopCount", 0),
             "conditionalCount": static.get("conditionalCount", 0),
             "cyclomaticComplexity": static.get("cyclomaticComplexity", 1),
         },
+        
+        # Worst-case complexity
         "timeComplexity": time_complexity,
         "spaceComplexity": space_complexity,
-        "complexityLevel": complexity_level(static),
+        
+        "complexityLevel": level,
         "score": quality_score(static),
         "refactorPercentage": refactor_percentage(static),
         "optimizationPercentage": optimization_percentage(static),
         "suggestions": suggestions,
     }
     
-    # Add formula details if available
-    if formula_result:
-        result["formulaDetails"] = {
-            "timeFormula": formula_result.get("formula", ""),
-            "spaceFormula": formula_result.get("spaceFormula", ""),
-            "maxLoopDepth": formula_result.get("maxLoopDepth", 0),
-            "hasRecursion": formula_result.get("hasRecursion", False),
-            "recursionCount": formula_result.get("recursionCount", 0),
-            "lineBreakdown": formula_result.get("lineAnalyses", [])[:10]  # Top 10 lines
-        }
+    # Add per-function breakdown if available
+    if per_func_result:
+        result["worstTimeFunction"] = per_func_result.get("worstTimeFunction", "main")
+        result["worstSpaceFunction"] = per_func_result.get("worstSpaceFunction", "main")
+        result["perFunctionAnalysis"] = per_func_result.get("functions", [])
+        result["summary"] = per_func_result.get("summary", "")
     
     return result
