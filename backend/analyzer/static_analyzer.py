@@ -137,19 +137,12 @@ class GenericMetrics:
         # Improved loop depth detection using brace/indentation analysis
         max_loop_depth = self._detect_loop_depth()
 
-        # recursion detection (conservative)
-        funcs = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", self.code)
-        
-        # Use regex to count to handle spaces like "func ("
-        def count_calls(fn_name):
-            return len(re.findall(rf"\b{re.escape(fn_name)}\s*\(", self.code))
-
-        recursion = any(count_calls(fn) > 1 for fn in funcs)
-        multi_rec = any(count_calls(fn) > 2 for fn in funcs)
+        # IMPROVED recursion detection - check if function calls ITSELF within its body
+        recursion, multi_rec = self._detect_recursion()
 
         return {
             "linesOfCode": len(self.lines),
-            "functionCount": len(set(funcs)),
+            "functionCount": self._count_functions(),
             "loopCount": loops,
             "conditionalCount": conditions,
             "cyclomaticComplexity": max(1 + loops + conditions, 1),
@@ -160,6 +153,94 @@ class GenericMetrics:
             "multiRecursion": multi_rec,
             "language": "Generic",
         }
+    
+    def _count_functions(self) -> int:
+        """Count function definitions in the code."""
+        # Match function definitions in various languages
+        patterns = [
+            r'\bdef\s+\w+\s*\(',           # Python
+            r'\bfunction\s+\w+\s*\(',      # JavaScript
+            r'\b\w+\s+\w+\s*\([^)]*\)\s*\{', # C/C++/Java style
+            r'\bfn\s+\w+\s*\(',             # Rust
+            r'\bfunc\s+\w+\s*\(',           # Go
+        ]
+        count = 0
+        for pattern in patterns:
+            count += len(re.findall(pattern, self.code))
+        return max(count, 1)
+    
+    def _detect_recursion(self):
+        """
+        Detect true recursion - a function calling itself within its body.
+        Returns (has_recursion, has_multi_recursion)
+        """
+        # Find all function definitions and their bodies
+        # Pattern for function definitions with capturing the function name and body
+        
+        # C++/Java/JavaScript style: returnType functionName(...) { ... }
+        func_pattern = r'\b(?:void|int|bool|string|double|float|auto|\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
+        
+        # Python style: def functionName(...):
+        py_func_pattern = r'\bdef\s+(\w+)\s*\([^)]*\)\s*:'
+        
+        has_recursion = False
+        has_multi_recursion = False
+        
+        lines = self.code.split('\n')
+        
+        # For C-style languages, track function bodies using braces
+        current_func = None
+        brace_depth = 0
+        func_start_depth = 0
+        func_body = []
+        
+        for line in lines:
+            # Check for C-style function definition
+            c_match = re.search(func_pattern, line)
+            py_match = re.search(py_func_pattern, line)
+            
+            if c_match and brace_depth == 0:
+                current_func = c_match.group(1)
+                func_start_depth = line.count('{')
+                brace_depth = func_start_depth
+                func_body = [line]
+            elif py_match:
+                current_func = py_match.group(1)
+                func_body = [line]
+            elif current_func:
+                func_body.append(line)
+                
+                # Track braces for C-style
+                brace_depth += line.count('{') - line.count('}')
+                
+                # Check for self-recursion: function calling itself
+                # Exclude the function definition line itself
+                if len(func_body) > 1:
+                    call_pattern = rf'\b{re.escape(current_func)}\s*\('
+                    calls_in_line = len(re.findall(call_pattern, line))
+                    
+                    if calls_in_line >= 1:
+                        has_recursion = True
+                    if calls_in_line >= 2:
+                        has_multi_recursion = True
+                
+                # End of function (for C-style)
+                if brace_depth <= 0 and '{' in ''.join(func_body):
+                    # Check total recursive calls in this function
+                    body_text = '\n'.join(func_body[1:])  # Exclude definition line
+                    call_pattern = rf'\b{re.escape(current_func)}\s*\('
+                    total_calls = len(re.findall(call_pattern, body_text))
+                    
+                    if total_calls >= 1:
+                        has_recursion = True
+                    if total_calls >= 2:
+                        has_multi_recursion = True
+                    
+                    current_func = None
+                    func_body = []
+                    brace_depth = 0
+        
+        return has_recursion, has_multi_recursion
 
     def _detect_loop_depth(self) -> int:
         """

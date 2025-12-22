@@ -10,28 +10,41 @@ def detect_language(code: str) -> str:
     Heuristic-based language detection.
     Used to route analysis logic and return accurate language info.
     Priority order: more specific patterns first.
+    
+    IMPORTANT: C++ must be checked BEFORE Java because:
+    - C++ uses `public:` (access specifier with colon)
+    - Java uses `public class` (modifier before keyword)
     """
     
-    # ---------- JAVA (check before Python - System.out.print contains 'print') ----------
-    if re.search(r'public\s+(class|static|void)|private\s+(class|static|void)', code):
+    # ---------- C++ (check BEFORE Java - has public: vs public class) ----------
+    if re.search(r'#include\s*<(iostream|vector|string|algorithm|map|set|queue|stack|cstdlib|cstring|cmath)>', code):
+        return "C++"
+    if re.search(r'std::|cout\s*<<|cin\s*>>|using\s+namespace\s+std|nullptr', code):
+        return "C++"
+    if re.search(r'template\s*<|std::vector|std::map|std::string|std::queue|std::stack', code):
+        return "C++"
+    # C++ class with access specifiers (public:, private:, protected:)
+    if re.search(r'class\s+\w+\s*\{', code) and re.search(r'\b(public|private|protected)\s*:', code):
+        return "C++"
+    # C++ style function with references/pointers in signature
+    if re.search(r'\w+\s*&\s*\w+|std::\w+|::\w+\s*\(', code):
+        return "C++"
+    
+    # ---------- JAVA (after C++) ----------
+    if re.search(r'public\s+(class|static|void|int|String)|private\s+(class|static|void|int|String)', code):
         return "Java"
-    if re.search(r'System\.out\.print|class\s+\w+\s*\{|void\s+main\s*\(\s*String', code):
+    if re.search(r'System\.out\.print|void\s+main\s*\(\s*String\s*\[\s*\]', code):
+        return "Java"
+    # Java package/import
+    if re.search(r'^package\s+[\w.]+;|^import\s+java\.', code, re.MULTILINE):
         return "Java"
     
-    # ---------- C++ (check before C) ----------
-    if re.search(r'#include\s*<(iostream|vector|string|algorithm|map|set|queue|stack)>', code):
-        return "C++"
-    if re.search(r'std::|cout\s*<<|cin\s*>>|using\s+namespace\s+std|nullptr|::\w+\(', code):
-        return "C++"
-    if re.search(r'template\s*<|std::vector|std::map|std::string', code):
-        return "C++"
-    
-    # ---------- C ----------
-    if re.search(r'#include\s*<(stdio|stdlib|string|math|ctype|time)\.h>', code):
+    # ---------- C (check after C++) ----------
+    if re.search(r'#include\s*<(stdio|stdlib|string|math|ctype|time|stdbool)\.h>', code):
         return "C"
     if re.search(r'printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(', code):
         return "C"
-    if re.search(r'int\s+main\s*\(\s*(void)?\s*\)', code) and '#include' in code:
+    if re.search(r'int\s+main\s*\(\s*(void|int\s+argc)?\s*[,)]', code) and '#include' in code:
         return "C"
     
     # ---------- TypeScript (check before JavaScript) ----------

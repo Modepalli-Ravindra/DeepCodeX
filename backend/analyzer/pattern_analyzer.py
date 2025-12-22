@@ -1,10 +1,40 @@
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple
+
+
+# Complexity ordering for comparison
+COMPLEXITY_ORDER = {
+    "CONSTANT_TIME": 0,
+    "FIND_MAX_MIN": 1,
+    "BINARY_SEARCH": 2,
+    "FREQUENCY_COUNT": 3,
+    "LINEAR_RECURSION": 4,
+    "KADANE": 5,
+    "BFS": 6,
+    "DFS": 7,
+    "GRAPH_TRAVERSAL": 8,
+    "PRIME_CHECK": 9,
+    "MERGE_SORT": 10,
+    "HEAP_SORT": 11,
+    "QUICK_SORT": 12,
+    "DIJKSTRA": 13,
+    "BELLMAN_FORD": 14,
+    "SELECTION_SORT": 15,
+    "BUBBLE_SORT": 16,
+    "QUADRATIC_SORT": 17,
+    "MATRIX_MULTIPLICATION": 18,
+    "FLOYD_WARSHALL": 19,
+    "KRUSKAL": 20,
+    "TSP_DP": 21,
+    "SUBSET_SUM": 22,
+    "EXPONENTIAL_RECURSION": 23,
+    "PERMUTATION": 24,
+}
 
 
 class PatternAnalyzer:
     """
-    Detects POSSIBLE algorithmic patterns.
+    Detects algorithmic patterns and returns the DOMINANT (highest complexity) pattern.
     Covers 20+ common algorithms with accurate detection.
     """
 
@@ -14,92 +44,115 @@ class PatternAnalyzer:
         self.static = static
 
     def detect(self) -> Optional[str]:
-        """Priority order matters - more specific patterns first."""
+        """
+        Find all matching patterns and return the one with HIGHEST complexity.
+        This ensures large codebases with multiple algorithms report the dominant one.
+        """
+        detected_patterns: List[str] = []
         
         # =============== GRAPH ALGORITHMS ===============
         if self._is_floyd_warshall():
-            return "FLOYD_WARSHALL"
+            detected_patterns.append("FLOYD_WARSHALL")
         
         if self._is_bellman_ford():
-            return "BELLMAN_FORD"
+            detected_patterns.append("BELLMAN_FORD")
         
         if self._is_dijkstra():
-            return "DIJKSTRA"
+            detected_patterns.append("DIJKSTRA")
         
         if self._is_kruskal():
-            return "KRUSKAL"
+            detected_patterns.append("KRUSKAL")
         
         if self._is_bfs():
-            return "BFS"
+            detected_patterns.append("BFS")
         
         if self._is_dfs():
-            return "DFS"
+            detected_patterns.append("DFS")
         
         if self._is_graph_traversal():
-            return "GRAPH_TRAVERSAL"
+            detected_patterns.append("GRAPH_TRAVERSAL")
 
         # =============== SORTING ALGORITHMS ===============
         if self._is_heap_sort():
-            return "HEAP_SORT"
+            detected_patterns.append("HEAP_SORT")
         
         if self._is_merge_sort():
-            return "MERGE_SORT"
+            detected_patterns.append("MERGE_SORT")
 
         if self._is_quick_sort():
-            return "QUICK_SORT"
+            detected_patterns.append("QUICK_SORT")
         
         if self._is_selection_sort():
-            return "SELECTION_SORT"
+            detected_patterns.append("SELECTION_SORT")
         
         if self._is_bubble_sort():
-            return "BUBBLE_SORT"
+            detected_patterns.append("BUBBLE_SORT")
         
         if self._is_quadratic_sort():
-            return "QUADRATIC_SORT"
+            detected_patterns.append("QUADRATIC_SORT")
 
         # =============== SEARCH ALGORITHMS ===============
         if self._is_binary_search():
-            return "BINARY_SEARCH"
+            detected_patterns.append("BINARY_SEARCH")
 
         # =============== MATHEMATICAL ALGORITHMS ===============
         if self._is_prime_check():
-            return "PRIME_CHECK"
+            detected_patterns.append("PRIME_CHECK")
         
         if self._is_matrix_multiplication():
-            return "MATRIX_MULTIPLICATION"
+            detected_patterns.append("MATRIX_MULTIPLICATION")
 
         # =============== DYNAMIC PROGRAMMING ===============
         if self._is_tsp_dp():
-            return "TSP_DP"
+            detected_patterns.append("TSP_DP")
         
         if self._is_subset_sum():
-            return "SUBSET_SUM"
+            detected_patterns.append("SUBSET_SUM")
 
         # =============== COMBINATORIAL ===============
         if self._is_permutation():
-            return "PERMUTATION"
+            detected_patterns.append("PERMUTATION")
 
         # =============== ARRAY ALGORITHMS ===============
         if self._is_kadane():
-            return "KADANE"
+            detected_patterns.append("KADANE")
         
         if self._is_frequency_count():
-            return "FREQUENCY_COUNT"
+            detected_patterns.append("FREQUENCY_COUNT")
         
         if self._is_find_max_min():
-            return "FIND_MAX_MIN"
+            detected_patterns.append("FIND_MAX_MIN")
         
         if self._is_constant_time():
-            return "CONSTANT_TIME"
+            detected_patterns.append("CONSTANT_TIME")
 
         # =============== RECURSION FALLBACKS ===============
         if self._is_exponential_recursion():
-            return "EXPONENTIAL_RECURSION"
+            detected_patterns.append("EXPONENTIAL_RECURSION")
 
         if self._is_linear_recursion():
-            return "LINEAR_RECURSION"
+            detected_patterns.append("LINEAR_RECURSION")
 
-        return None
+        # Return the pattern with HIGHEST complexity
+        if not detected_patterns:
+            return None
+        
+        # Sort by complexity order (highest first) and return the dominant one
+        detected_patterns.sort(key=lambda p: COMPLEXITY_ORDER.get(p, 0), reverse=True)
+        return detected_patterns[0]
+
+    def detect_all(self) -> List[str]:
+        """Return all detected patterns (for debugging/detailed output)."""
+        detected = []
+        
+        for method_name in dir(self):
+            if method_name.startswith('_is_') and method_name != '_is_constant_time':
+                method = getattr(self, method_name)
+                if callable(method) and method():
+                    pattern_name = method_name[4:].upper()
+                    detected.append(pattern_name)
+        
+        return detected
 
     # ================== GRAPH ALGORITHMS ==================
 
@@ -119,7 +172,7 @@ class PatternAnalyzer:
                 re.search(r"edge", self.code)
                 and re.search(r"dist", self.code)
                 and self.static.get("maxLoopDepth", 0) >= 2
-                and "integer.max_value" in self.code or "int_max" in self.code or "inf" in self.code
+                and ("integer.max_value" in self.code or "int_max" in self.code or "inf" in self.code)
             )
         )
 
@@ -191,37 +244,38 @@ class PatternAnalyzer:
     def _is_selection_sort(self) -> bool:
         """Find minimum in unsorted portion."""
         return (
-            self.static.get("maxLoopDepth", 0) == 2
-            and re.search(r"min_idx|min_index|minidx", self.code)
+            self.static.get("maxLoopDepth", 0) >= 2
+            and re.search(r"min_idx|min_index|minidx|minindex", self.code)
             and re.search(r"swap|temp", self.code)
         )
 
     def _is_bubble_sort(self) -> bool:
         """Adjacent element comparison and swap."""
         return (
-            self.static.get("maxLoopDepth", 0) == 2
-            and re.search(r"bubble|swapped", self.code)
+            self.static.get("maxLoopDepth", 0) >= 2
+            and (re.search(r"bubble", self.code) or re.search(r"swapped", self.code))
             and re.search(r"swap|temp", self.code)
         )
 
     def _is_quadratic_sort(self) -> bool:
-        """Generic O(n²) sorting pattern."""
+        """Generic O(n²) sorting pattern with nested loops."""
         return (
-            self.static.get("maxLoopDepth", 0) == 2
+            self.static.get("maxLoopDepth", 0) >= 2
             and re.search(r"swap|temp", self.code)
-            and re.search(r"arr|list|array", self.code)
+            and re.search(r"arr|list|array|data", self.code)
+            and self.static.get("loopCount", 0) >= 2
         )
 
     # ================== SEARCH ALGORITHMS ==================
 
     def _is_binary_search(self) -> bool:
         """Binary search with left/right/mid pointers."""
-        return (
-            re.search(r"mid", self.code)
-            and (re.search(r"left|low|lo|start", self.code))
-            and (re.search(r"right|high|hi|end", self.code))
-            and (re.search(r"while|<=|>=", self.code) or self.static.get("hasRecursion", False))
-        )
+        # More strict: requires the division by 2 pattern
+        has_mid = re.search(r"mid", self.code)
+        has_left_right = (re.search(r"left|low|lo", self.code)) and (re.search(r"right|high|hi", self.code))
+        has_halving = re.search(r"/\s*2|//\s*2|>>\s*1", self.code)
+        
+        return has_mid and has_left_right and has_halving
 
     # ================== MATHEMATICAL ALGORITHMS ==================
 
@@ -237,14 +291,14 @@ class PatternAnalyzer:
 
     def _is_matrix_multiplication(self) -> bool:
         """Matrix multiplication with triple nested loops."""
+        has_triple_loop = self.static.get("maxLoopDepth", 0) >= 3
+        has_matrix_keyword = re.search(r"matrix|matri|multiply|multipl", self.code)
+        has_2d_array_pattern = re.search(r"\[\s*\w+\s*\]\s*\[\s*\w+\s*\]", self.code)
+        has_accumulation = re.search(r"\+=", self.code)
+        
         return (
-            self.static.get("maxLoopDepth", 0) >= 3
-            and re.search(r"matrix|matri", self.code)
-            or (
-                self.static.get("maxLoopDepth", 0) >= 3
-                and re.search(r"\[\s*\w+\s*\]\s*\[\s*\w+\s*\]", self.code)
-                and re.search(r"\+=", self.code)
-            )
+            has_triple_loop
+            and (has_matrix_keyword or (has_2d_array_pattern and has_accumulation))
         )
 
     # ================== DYNAMIC PROGRAMMING ==================
@@ -327,4 +381,4 @@ class PatternAnalyzer:
 
     def _is_linear_recursion(self) -> bool:
         """Single recursive call (linear)."""
-        return self.static.get("hasRecursion", False)
+        return self.static.get("hasRecursion", False) and not self.static.get("multiRecursion", False)
