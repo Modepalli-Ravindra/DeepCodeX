@@ -207,6 +207,7 @@ class PerFunctionAnalyzer:
                 self.params = [a.arg for a in node.args.args]
                 self.uses_param_as_bound = False
                 self.recursion_calls = 0
+                self.in_recursion = False
             
             def visit_For(self, n):
                 self.loop_count += 1
