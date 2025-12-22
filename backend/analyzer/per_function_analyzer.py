@@ -158,10 +158,36 @@ class PerFunctionAnalyzer:
             worst_time = effective_worst_time
             is_collapsed_demo = False
 
+        # RULE 3: Global Space Analysis
+        # Check for global arrays that might dominate space (e.g. adj[100][100])
+        global_space = []
+        global_code = self.code
+        # Remove function bodies to see only global scope roughly (heuristic)
+        # (This is tricky with regex, but we look for top-level array decls)
+        array_matches = re.finditer(r'(?:int|float|double|bool|char|long)\s+(\w+)\s*\[([^\]]*)\](?:\s*\[([^\]]*)\])?', global_code)
+        for m in array_matches:
+            dim1 = m.group(2)
+            dim2 = m.group(3)
+            if dim2: # 2D array
+                if re.search(r'\b(n|v|e)\b', dim1.lower()) or re.search(r'\b(n|v|e)\b', dim2.lower()):
+                    global_space.append("O(n²)") # Or V^2, genericized to n^2 internally then mapped
+                else: 
+                     # Check if it looks large constant
+                    try:
+                         if int(dim1) * int(dim2) > 1000: global_space.append("O(1)") # Large constant block
+                    except: pass
+            elif dim1:
+                if re.search(r'\b(n|v|e)\b', dim1.lower()):
+                    global_space.append("O(n)")
+
         effective_spaces = []
         for f in self.functions:
             effective_spaces.append((f.name, f.space_complexity))
-                
+        
+        # Add global space to consideration
+        for gs in global_space:
+             effective_spaces.append(("global_memory", gs))
+
         worst_space = self._get_worst_complexity([es[1] for es in effective_spaces])
         
         # Consistent Driver Attribution
@@ -705,6 +731,15 @@ class PerFunctionAnalyzer:
             code=code
         )
     
+        return max_depth
+    
+    def _is_interactive_loop(self, line: str) -> bool:
+        """Rule 7: Interactive loops (menus, servers) do not scale."""
+        if re.search(r'while\s*\(\s*(true|1|TRUE)\s*\)', line): return True
+        if re.search(r'for\s*\(\s*;\s*;\s*\)', line): return True
+        if re.search(r'while\s*\(\s*.*\b(input|scanf|cin|next|read)\b', line.lower()): return True
+        return False
+
     def _estimate_loop_depth(self, code: str) -> int:
         """
         Estimate maximum nested loop depth with multi-language resilience.
@@ -719,18 +754,16 @@ class PerFunctionAnalyzer:
             line = line.strip()
             # Loop keyword detection
             if re.search(r'\b(for|while)\s*\(', line):
-                # We reached a nesting level
-                current_depth += 1
-                max_depth = max(max_depth, current_depth)
-                loop_starts.append(brace_depth)
+                # RULE 7 Check: If loop is interactive/infinite, do not count as scaling logic
+                if not self._is_interactive_loop(line):
+                    current_depth += 1
+                    max_depth = max(max_depth, current_depth)
+                    loop_starts.append(brace_depth)
             
             # Braces detection
             brace_depth += line.count('{') - line.count('}')
             
             # UN-NESTING LOGIC:
-            # If a loop has a brace, we only pop when that brace depth is exited (<).
-            # If a loop has NO brace, it technically only lasts for the very next line of logic.
-            # Robust heuristic: pop only when brace depth decreases below the start depth.
             while loop_starts and brace_depth < loop_starts[-1]:
                 loop_starts.pop()
                 current_depth -= 1
