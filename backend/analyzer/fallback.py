@@ -3,6 +3,7 @@ from analyzer.complexity_rules import estimate_big_o
 from analyzer.pattern_analyzer import PatternAnalyzer
 from analyzer.pattern_confidence import PatternConfidence
 from analyzer.complexity_map import resolve_complexity
+from analyzer.universal_analyzer import analyze_with_formula
 
 
 # ==========================================================
@@ -74,23 +75,44 @@ def quality_score(static: dict) -> int:
 
 
 # ==========================================================
-# FINAL ANALYSIS PIPELINE
+# FINAL ANALYSIS PIPELINE (WITH UNIVERSAL FORMULA)
 # ==========================================================
 
 def analyze_with_fallback(code: str, static: dict) -> dict:
+    """
+    Multi-layer analysis pipeline:
+    1. Pattern Recognition (known algorithms)
+    2. Universal Formula Analysis (line-by-line classification)
+    3. Rule-based Fallback
+    """
+    
+    # Layer 1: Pattern Recognition
     pattern = PatternAnalyzer(code, static).detect()
-
+    formula_result = None
+    
     if pattern and PatternConfidence.is_confident(pattern, code, static):
         time_complexity, space_complexity = resolve_complexity(pattern)
+        analysis_engine = f"Pattern Engine: {pattern}"
     else:
-        time_complexity, space_complexity = estimate_big_o(
-            loop_count=static.get("loopCount", 0),
-            dynamic_allocations=static.get("dynamicAllocations", 0),
-            max_loop_depth=static.get("maxLoopDepth", 0),
-            has_log_loop=static.get("hasLogLoop", False),
-            has_recursion=static.get("hasRecursion", False),
-            multi_recursion=static.get("multiRecursion", False),
-        )
+        # Layer 2: Universal Formula Analysis
+        # T(n) = max{f₁(n), f₂(n), ..., fₗ(n)}
+        # S(n) = max{g₁(n), g₂(n), ..., gₗ(n)}
+        try:
+            formula_result = analyze_with_formula(code)
+            time_complexity = formula_result["timeComplexity"]
+            space_complexity = formula_result["spaceComplexity"]
+            analysis_engine = "Universal Formula Engine"
+        except Exception:
+            # Layer 3: Fallback to simple rules
+            time_complexity, space_complexity = estimate_big_o(
+                loop_count=static.get("loopCount", 0),
+                dynamic_allocations=static.get("dynamicAllocations", 0),
+                max_loop_depth=static.get("maxLoopDepth", 0),
+                has_log_loop=static.get("hasLogLoop", False),
+                has_recursion=static.get("hasRecursion", False),
+                multi_recursion=static.get("multiRecursion", False),
+            )
+            analysis_engine = "Rule-based Engine"
 
     try:
         suggestions = get_live_suggestions(code, static)
@@ -101,9 +123,9 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
             "Split large functions into smaller units.",
         ]
 
-    return {
+    result = {
         "language": static.get("language", "Auto"),
-        "engine": "Pattern Engine + Rule Engine (STATIC)",
+        "engine": analysis_engine,
         "metrics": {
             "linesOfCode": static.get("linesOfCode", 0),
             "functionCount": static.get("functionCount", 0),
@@ -119,3 +141,16 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
         "optimizationPercentage": optimization_percentage(static),
         "suggestions": suggestions,
     }
+    
+    # Add formula details if available
+    if formula_result:
+        result["formulaDetails"] = {
+            "timeFormula": formula_result.get("formula", ""),
+            "spaceFormula": formula_result.get("spaceFormula", ""),
+            "maxLoopDepth": formula_result.get("maxLoopDepth", 0),
+            "hasRecursion": formula_result.get("hasRecursion", False),
+            "recursionCount": formula_result.get("recursionCount", 0),
+            "lineBreakdown": formula_result.get("lineAnalyses", [])[:10]  # Top 10 lines
+        }
+    
+    return result
