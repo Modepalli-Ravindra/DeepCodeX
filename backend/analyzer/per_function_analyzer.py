@@ -441,12 +441,20 @@ class PerFunctionAnalyzer:
             return "O(1)"
         
         if loop_depth == 1:
-            # Check for logarithmic loop (i *= 2, i /= 2, i >>= 1)
-            if re.search(r'\*=\s*2|/=\s*2|//=\s*2|>>=\s*1|\b\w+\s*=\s*\w+\s*\*|/\s*2', code):
+            # 1. Logarithmic check (Binary Search / Divide)
+            log_patterns = [
+                r'\*=\s*2', r'/=\s*2', r'//=\s*2', r'>>=\s*1', 
+                r'low\s*=\s*mid\s*\+\s*1', r'high\s*=\s*mid\s*-\s*1',
+                r'left\s*=\s*mid\s*\+\s*1', r'right\s*=\s*mid\s*-\s*1',
+                r'start\s*=\s*mid\s*\+\s*1', r'end\s*=\s*mid\s*-\s*1'
+            ]
+            if any(re.search(p, code) for p in log_patterns):
                 return "O(log n)"
-            # Square root loop (i*i <= n or sqrt(n))
+            
+            # 2. Square root loop
             if re.search(r'sqrt\s*\(|i\s*\*\s*i\s*<=|i\s*\*\s*i\s*<', code):
                 return "O(√n)"
+            
             return "O(n)"
         
         if loop_depth == 2:
@@ -488,15 +496,19 @@ class PerFunctionAnalyzer:
         elif data_structures:
             space_complexities.append("O(n)")
         
-        # Recursion stack space (Depth of recursion)
+        # Recursion stack space
         if recursion_type == RecursionType.BINARY:
-            space_complexities.append("O(log n)")  # stack depth log n
+            space_complexities.append("O(log n)")
         elif recursion_type == RecursionType.DIVIDE_CONQUER:
-            space_complexities.append("O(n)")  # Merge sort uses O(n) array + O(log n) stack
+            # Merge sort uses O(n) temp array. Quick sort is O(log n) stack.
+            if "partition" in code.lower() or "pivot" in code.lower():
+                space_complexities.append("O(log n)") # QuickSort stack
+            else:
+                space_complexities.append("O(n)") # MergeSort temp array
         elif recursion_type in [RecursionType.LINEAR, RecursionType.EXPONENTIAL]:
-            space_complexities.append("O(n)")  # stack depth n
+            space_complexities.append("O(n)")
         elif recursion_type == RecursionType.FACTORIAL:
-            space_complexities.append("O(n)")  # stack depth n (for permutations)
+            space_complexities.append("O(n)")
         
         if not space_complexities:
             return "O(1)"
@@ -598,14 +610,18 @@ class PerFunctionAnalyzer:
         elif any(w in name_lower for w in ["queen", "sudoku", "solve", "path"]):
             category = "Backtracking"
 
-        code_lower = code.lower()
-        
+        # Estimate loop depth using brace tracking
+        loop_depth = self._estimate_loop_depth(code)
+
+        # Detect composite DS operations (O(1) average)
+        if any(w in code for w in ["Set", "Map", "unordered_map", "unordered_set", "HashMap", "HashSet", "dict", "set()"]):
+            if re.search(r'\.(has|get|add|set|put|contains|find|insert)\b', code):
+                if loop_depth <= 1: 
+                    pass
+
         # Count loops
         loop_matches = list(re.finditer(r'\b(for|while)\s*\(', code))
         loop_count = len(loop_matches)
-        
-        # Estimate loop depth using brace tracking
-        loop_depth = self._estimate_loop_depth(code)
         
         # Detect all external calls in the block and identify constant vs scaling
         external_calls = []
