@@ -363,20 +363,6 @@ export const CodeAnalysis: React.FC = () => {
                     💡 Tip: Paste code with functions, loops, or class definitions for complexity analysis.
                   </p>
                 </div>
-                <div className="grid grid-cols-3 gap-4 w-full opacity-30">
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Worst-Case Time</p>
-                    <p className="text-2xl font-bold text-gray-600">N/A</p>
-                  </div>
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Worst-Case Space</p>
-                    <p className="text-2xl font-bold text-gray-600">N/A</p>
-                  </div>
-                  <div className="bg-surface rounded-xl p-5 border border-gray-800">
-                    <p className="text-xs text-gray-400">Score</p>
-                    <p className="text-2xl font-bold text-gray-600">0</p>
-                  </div>
-                </div>
               </div>
             ) : (
               /* NORMAL CODE ANALYSIS RESULTS */

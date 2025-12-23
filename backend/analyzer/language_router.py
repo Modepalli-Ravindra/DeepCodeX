@@ -119,8 +119,20 @@ def is_code(code: str) -> bool:
     if len(non_empty_lines) < 2:
         # Very short - check for basic code patterns
         text = code.strip()
-        if re.search(r'^(def|function|class|public|private)\s+\w+', text):
+        # Stricter checks for single-line code
+        if re.match(r'^(def|function)\s+\w+\s*\(', text) or re.match(r'^function\s*\(', text):
             return True
+        if re.match(r'^class\s+[A-Z]\w*\s*[:{]', text):
+            return True
+        if re.match(r'^(public|private)\s+(class|static|void|int|bool|function)\s+\w+', text):
+            return True
+        # Common single-line statements
+        if re.match(r'^(import|#include|package|using)\s+', text) or re.match(r'^from\s+\w+\s+import\s+', text):
+            return True
+        if re.search(r'^(console\.log|System\.out\.print|print|echo|fmt\.Print)\s*\(', text):
+            return True
+        if re.match(r'^\w+\s*=\s*(\[|\{|new\s+|FUNCTION|class)', text): # Assignment of complex types
+             return True
         return False
     
     # ============================================
@@ -173,13 +185,34 @@ def is_code(code: str) -> bool:
         
         # === STRONG CODE INDICATORS ===
         
-        # Function/class definitions
-        if re.match(r'^\s*(def|function|class|public|private|protected|void|int|bool)\s+\w+', line):
+        # Function/class definitions (More strict)
+        # def name( OR function name( OR class Name:/{
+        if re.match(r'^\s*def\s+\w+\s*\(', line): 
+            is_code_line = True
+        elif re.match(r'^\s*function\s+(\w+\s*)?\(', line):
+            is_code_line = True
+        elif re.match(r'^\s*class\s+[A-Z]\w*', line) and re.search(r'[:{\(]', line):
+            is_code_line = True
+        elif re.match(r'^\s*(class|interface|struct)\s+\w+\s*[{:]', line):
             is_code_line = True
         
-        # Control structures (support Python style without parens)
-        if re.match(r'^\s*(if|for|while|elif|else|try|except|switch|with|match)\b', line):
+        # Access modifiers (must be followed by keywords or types)
+        # public static, private void, public ClassName
+        if re.match(r'^\s*(public|private|protected)\s+(static|final|abstract|void|class|int|bool|string|function|def)\b', line, re.IGNORECASE):
             is_code_line = True
+        elif re.match(r'^\s*(public|private|protected)\s+[A-Z]\w+', line): # Type name usually capped
+             is_code_line = True
+
+        # Control structures (support Python style without parens)
+        # stricter: require : or { or ( for some, or ensure e.g. 'if' is not 'if I...'
+        if re.match(r'^\s*(if|for|while|elif|else|switch|catch)\s*\(', line): # C-style with parens
+            is_code_line = True
+        elif re.match(r'^\s*(if|elif|while|with)\s+.*:\s*$', line): # Python style with colon
+            is_code_line = True
+        elif re.match(r'^\s*(try|finally|do)\s*[:\{]', line):
+            is_code_line = True
+        elif re.match(r'^\s*(else)\s*[:\{]?', line): # else can be bare
+             is_code_line = True
         
         # Import/include statements
         if re.match(r'^\s*(import|from\s+\w+\s+import|#include|require|use|package)\s', line):

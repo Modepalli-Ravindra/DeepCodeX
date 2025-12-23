@@ -1,4 +1,4 @@
-from ai.llm import get_live_suggestions
+from ai.llm import get_live_suggestions, analyze_complexity_with_llm
 from analyzer.pattern_analyzer import PatternAnalyzer
 from analyzer.pattern_confidence import PatternConfidence
 from analyzer.complexity_map import resolve_complexity
@@ -89,6 +89,45 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
     4. Always use MAX (not multiply) for worst-case
     """
     
+    # LEVEL 0: AI Deep Analysis (Tricks & Logics from Advanced LLMs)
+    # The user requested "Genei/ChatGPT" level accuracy, so we prioritize the LLM if available.
+    ai_result = analyze_complexity_with_llm(code)
+    
+    if ai_result:
+        final_time = ai_result.get("time_complexity", "O(n)")
+        final_space = ai_result.get("space_complexity", "O(1)")
+        reasoning = ai_result.get("reasoning", "AI-Powered Analysis")
+        
+        # Determine level for the AI result
+        level = complexity_level_from_worst(final_time)
+        
+         # Get suggestions (reused logic)
+        try:
+            suggestions = get_live_suggestions(code, static)
+        except Exception:
+            suggestions = ["Optimize logic based on AI findings."]
+
+        return {
+            "language": static.get("language", "Auto"),
+            "engine": "DeepCodeX AI Engine (Chain-of-Thought)",
+            "metrics": {
+                "linesOfCode": static.get("linesOfCode", 0),
+                "functionCount": static.get("functionCount", 1),
+                "loopCount": static.get("loopCount", 0),
+                "conditionalCount": static.get("conditionalCount", 0),
+            },
+            "timeComplexity": final_time,
+            "spaceComplexity": final_space,
+            "complexityLevel": level,
+            "score": quality_score(static), # Keep static quality score
+            "refactorPercentage": refactor_percentage(static),
+            "optimizationPercentage": optimization_percentage(static),
+            "suggestions": suggestions,
+            "summary": reasoning,
+            "worstTimeFunction": "AI_Detected_Model",
+            "worstSpaceFunction": "AI_Detected_Model",
+        }
+
     # Layer 2: Per-function analysis (CORE STRUCTURAL ANALYSIS)
     per_func_result = analyze_per_function(code)
     

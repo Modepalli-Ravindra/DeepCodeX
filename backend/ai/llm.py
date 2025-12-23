@@ -110,3 +110,73 @@ Do not include explanations, introductions, or over-promises.
         raise RuntimeError("No valid suggestions generated")
 
     return suggestions[:5]
+
+
+def analyze_complexity_with_llm(code: str) -> dict:
+    """
+    Performs a deep Chain-of-Thought analysis using the LLM to determine
+    accurate Time and Space complexity.
+    Returns a dict with keys: 'time', 'space', 'reasoning'.
+    """
+    if not OPENROUTER_API_KEY:
+        return None
+
+    prompt = f"""
+You are an elite algorithm complexity expert. Your goal is to provide 100% accurate Big-O analysis used by top-tier tech companies.
+
+Analyze the following code using a strict CHAIN OF THOUGHT process:
+1. ALGORITHM ID: Identify the specific algorithm (e.g., Merge Sort, BFS, DP with Memoization).
+2. KEY OPERATIONS: Identify the loops, recursion depths, and dominant operations.
+3. INPUT SCALING: How do these operations grow as input 'N' increases?
+4. WORST CASE: Consider the worst-case scenario (e.g., quicksort pivot selection, hash collisions).
+5. CONSTANT BOUNDS: check if the input is fixed (e.g., logic(5)). If fixed, complexity is O(1).
+6. SPACE ANALYSIS: Include stack depth for recursion and auxiliary memory.
+
+CODE:
+{code}
+
+You must output valid JSON ONLY. No other text.
+Format:
+{{
+  "time_complexity": "O(...)",
+  "space_complexity": "O(...)",
+  "reasoning": "Brief summary of the chain-of-thought analysis (max 2 sentences)."
+}}
+"""
+
+    try:
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": MODEL,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2, # Low temperature for precision
+                "response_format": { "type": "json_object" } 
+            },
+            timeout=20,
+        )
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+        if "choices" not in data or not data["choices"]:
+            return None
+
+        import json
+        content = data["choices"][0]["message"]["content"]
+        # Sanitize markdown code blocks if present
+        if "```json" in content:
+            content = content.replace("```json", "").replace("```", "")
+        
+        return json.loads(content)
+
+    except Exception as e:
+        print(f"LLM Analysis failed: {e}")
+        return None
