@@ -618,6 +618,7 @@ class PerFunctionAnalyzer:
         """Analyze a generic code block."""
         params = params or []
         name_lower = name.lower()
+        code_lower = code.lower()
         
         # Determine category based on name
         category = "General"

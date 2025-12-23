@@ -403,25 +403,79 @@ export const CodeAnalysis: React.FC = () => {
                   )}
 
                   {/* CORE STATISTICS GRID */}
-                  <div className="bg-surface border border-gray-800 rounded-3xl overflow-hidden divide-y divide-gray-800">
-                    <div className="grid grid-cols-2 divide-x divide-gray-800">
-                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Lines of Code</p>
-                        <p className="text-3xl font-bold text-gray-100">{result.metrics.linesOfCode}</p>
+                  {/* CORE STATISTICS GRID */}
+                  <div className="bg-surface border border-gray-800 rounded-3xl overflow-hidden">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-800">
+                      {/* Left: Text Stats */}
+                      <div className="divide-y divide-gray-800 h-full flex flex-col justify-center">
+                        <div className="grid grid-cols-2 divide-x divide-gray-800 flex-1">
+                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Lines of Code</p>
+                            <p className="text-3xl font-bold text-gray-100">{result.metrics.linesOfCode}</p>
+                          </div>
+                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Functions</p>
+                            <p className="text-3xl font-bold text-gray-100">{result.metrics.functionCount}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 divide-x divide-gray-800 flex-1">
+                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Loops</p>
+                            <p className="text-3xl font-bold text-gray-100">{result.metrics.loopCount}</p>
+                          </div>
+                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Conditions</p>
+                            <p className="text-3xl font-bold text-gray-100">{result.metrics.conditionalCount}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Functions</p>
-                        <p className="text-3xl font-bold text-gray-100">{result.metrics.functionCount}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 divide-x divide-gray-800">
-                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Loops</p>
-                        <p className="text-3xl font-bold text-gray-100">{result.metrics.loopCount}</p>
-                      </div>
-                      <div className="p-8 text-center hover:bg-white/[0.02] transition-colors">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Conditions</p>
-                        <p className="text-3xl font-bold text-gray-100">{result.metrics.conditionalCount}</p>
+
+                      {/* Right: Chart */}
+                      <div className="p-6 h-[250px] bg-white/[0.01] flex items-center justify-center relative group">
+                        <div className="absolute top-3 right-4">
+                          <span className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">Metrics Visualizer</span>
+                        </div>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={metricData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                            <XAxis
+                              dataKey="name"
+                              stroke="#6b7280"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                              dy={10}
+                            />
+                            <YAxis
+                              stroke="#6b7280"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <Tooltip
+                              cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                borderColor: '#1e293b',
+                                color: '#f8fafc',
+                                borderRadius: '8px',
+                                fontSize: '12px'
+                              }}
+                              itemStyle={{ color: '#818cf8' }}
+                            />
+                            <Bar
+                              dataKey="value"
+                              fill="#6366f1"
+                              radius={[4, 4, 0, 0]}
+                              barSize={30}
+                              animationDuration={1500}
+                            >
+                              {metricData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b'][index % 5]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   </div>
@@ -434,7 +488,7 @@ export const CodeAnalysis: React.FC = () => {
                         <h3 className="text-4xl font-black text-white">{result.optimizationPercentage}%</h3>
                       </div>
                       <div className="bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-500/30">
-                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-tighter">AI Suggestions Powered by Gemini</span>
+                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-tighter">Optimization Insights</span>
                       </div>
                     </div>
 
@@ -453,16 +507,7 @@ export const CodeAnalysis: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* ACCURACY FOOTER */}
-                  <div className="flex flex-col items-center gap-2 pt-4">
-                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
-                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">High-Precision Asymptotic Model</span>
-                    </div>
-                    <p className="text-[8px] text-gray-700 uppercase tracking-[0.3em] font-medium">
-                      Analyzes scaling drivers and constant-bounded call paths
-                    </p>
-                  </div>
+
                 </div>
               </>
             )}

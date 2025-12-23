@@ -109,7 +109,7 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
 
         return {
             "language": static.get("language", "Auto"),
-            "engine": "DeepCodeX AI Engine (Chain-of-Thought)",
+            "engine": "DeepCodeX Advanced Engine",
             "metrics": {
                 "linesOfCode": static.get("linesOfCode", 0),
                 "functionCount": static.get("functionCount", 1),
@@ -124,8 +124,8 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
             "optimizationPercentage": optimization_percentage(static),
             "suggestions": suggestions,
             "summary": reasoning,
-            "worstTimeFunction": "AI_Detected_Model",
-            "worstSpaceFunction": "AI_Detected_Model",
+            "worstTimeFunction": "Global Analysis",
+            "worstSpaceFunction": "Global Analysis",
         }
 
     # Layer 2: Per-function analysis (CORE STRUCTURAL ANALYSIS)
