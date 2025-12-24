@@ -50,3 +50,12 @@ export const getHistory = async () => {
 
   return res.json();
 };
+export const getHistory = async () => {
+  const res = await fetch("http://127.0.0.1:5000/history");
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch history");
+  }
+
+  return res.json();
+};

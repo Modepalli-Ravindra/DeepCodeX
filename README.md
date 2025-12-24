@@ -2,16 +2,17 @@
 
 # 🧠 DeepCodeX
 
-### AI-Powered Code Complexity Analyzer
+### AI-Powered Code Complexity Analyzer with History Tracking
 
 [![Made with Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![Supabase](https://img.shields.io/badge/Supabase-Integrated-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
 
-**Analyze code complexity in real-time with pattern recognition, AST parsing, and AI-powered suggestions.**
+**Analyze code complexity in real-time, get AI-powered warnings, and save your analysis history.**
 
-[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture)
+[Features](#-features) • [Installation](#-installation) • [Configuration](#-configuration) • [Usage](#-usage) • [Architecture](#-architecture)
 
 </div>
 
@@ -19,56 +20,50 @@
 
 ## ✨ Features
 
-### 🎯 **Complexity Analysis**
-- **Time Complexity**: Accurate Big-O estimation (O(1), O(log n), O(n), O(n²), O(2ⁿ), etc.)
-- **Space Complexity**: Memory usage analysis based on data structures and recursion
-- **Pattern Recognition**: Detects 20+ common algorithms automatically
+### 🎯 **Advanced Complexity Analysis**
+- **Time Complexity**: Precise Big-O estimation (O(1), O(n log n), O(n²), etc.) using AST and pattern recognition.
+- **Space Complexity**: Memory usage analysis including recursion stack depth.
+- **Algorithm Detection**: Identifies 20+ algorithms including Graph traversals, DP, and Sorting.
 
-### 🔍 **Automatic Language Detection**
-Supports 10 programming languages with real-time detection:
+### 💾 **History & Persistence (Supabase)**
+- **Analysis Logging**: Automatically saves every analysis to a Supabase database.
+- **History View**: Browse past analyses with `code_hash`, complexity metrics, and AI suggestions.
+- **Deduplication**: Uses SHA-256 hashing to track unique code submissions.
 
-| Language | Icon | Detection Markers |
-|----------|------|-------------------|
-| Python | 🐍 | `def`, `import`, `print()` |
-| Java | ☕ | `public class`, `System.out.print` |
-| C++ | ⚡ | `#include`, `std::`, `cout` |
-| C | 🔧 | `printf`, `malloc`, `#include <stdio.h>` |
-| JavaScript | 📜 | `function`, `const`, `console.log` |
-| TypeScript | 📘 | Type annotations, `interface` |
-| Go | 🐹 | `func`, `package main`, `:=` |
-| Rust | 🦀 | `fn`, `let mut`, `impl` |
-| Ruby | 💎 | `def`, `puts`, `end` |
-| PHP | 🐘 | `<?php`, `$variable`, `echo` |
+### 🔍 **Smart Detection**
+- **Language Auto-Detection**: Supports Python, Java, C++, JavaScript, Go, Rust, and more.
+- **Static Analysis**: Counts lines, functions, loops, and conditionals without executing code.
+- **Recursion Analysis**: Distinguishes between Linear, Binary, and Tail recursion.
 
-### 📊 **Visual Analytics**
-- **Structural Metrics**: Lines of code, functions, loops, conditionals
-- **Cyclomatic Complexity**: Code maintainability score
-- **Refactor Potential**: Optimization percentage with donut chart
-- **Quality Score**: Overall code quality rating (0-100)
-
-### 🤖 **AI-Powered Suggestions**
-- Refactoring recommendations via LLM integration
-- Performance optimization tips
-- Code structure improvements
+### 🤖 **AI Intelligence**
+- **Gemini / OpenRouter Integration**: Provides actionable refactoring suggestions.
+- **Security & Quality**: Flags potential security risks and maintainability processing.
 
 ---
 
-## 🎬 Demo
+## 🛠️ Tech Stack
 
-### Dashboard
-![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+Preview)
+### Frontend
+- **React 19** + **Vite**
+- **TypeScript**
+- **Monaco Editor** (VS Code-like editing)
+- **Recharts** (Data Visualization)
+- **Google GenAI SDK**
 
-### Code Analysis
-![Analysis](https://via.placeholder.com/800x400?text=Code+Analysis+Preview)
+### Backend
+- **Flask** (Python API)
+- **Supabase** (PostgreSQL + Auth)
+- **Python AST** (Static Analysis)
+- **Gemini / OpenRouter API** (LLM)
 
 ---
 
 ## 🚀 Installation
 
 ### Prerequisites
-- **Node.js** 18+ 
+- **Node.js** 18+
 - **Python** 3.8+
-- **npm** or **yarn**
+- **Supabase Account** (for database)
 
 ### 1️⃣ Clone the Repository
 ```bash
@@ -77,6 +72,7 @@ cd DeepCodeX
 ```
 
 ### 2️⃣ Install Frontend Dependencies
+The project uses valid npm workspaces or a single root package structure.
 ```bash
 npm install
 ```
@@ -95,100 +91,73 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4️⃣ Configure Environment Variables
-Create a `.env` file in the root directory:
+---
+
+## ⚙️ Configuration
+
+Create a `.env` file in the **backend** directory (and/or root depending on setup) with the following keys:
+
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key
-GEMINI_API_KEY=your_gemini_api_key
+# AI Provider Keys
+OPENROUTER_API_KEY=your_openrouter_key
+GEMINI_API_KEY=your_gemini_key
+
+# Supabase Configuration (Required for History)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
-### 5️⃣ Run the Application
+> **Note**: `SUPABASE_SERVICE_ROLE_KEY` is required because the backend writes directly to the `analysis_history` table.
 
-**Terminal 1 - Backend (Flask):**
+---
+
+## 🏃 Usage
+
+### 1. Start the Backend
+Open a terminal in the `backend` folder:
 ```bash
-cd backend
-.\venv\Scripts\activate  # Windows
+# Activate venv first!
 python app.py
 ```
+*Server runs on `http://localhost:5000`*
 
-**Terminal 2 - Frontend (Vite):**
+### 2. Start the Frontend
+Open a new terminal in the root folder:
 ```bash
 npm run dev
 ```
+*App runs on `http://localhost:3000`*
 
-### 6️⃣ Open in Browser
-Navigate to: **http://localhost:3000**
-
----
-
-## 📖 Usage
-
-1. **Paste Code**: Copy your code into the Monaco editor
-2. **Auto-Detection**: Language is automatically detected and displayed
-3. **Click Analyze**: Or wait for auto-analysis (2 second debounce)
-4. **View Results**: See time/space complexity, metrics, and suggestions
-
-### Supported Algorithms (Pattern Detection)
-
-| Category | Algorithms |
-|----------|------------|
-| **Sorting** | Merge Sort, Quick Sort, Heap Sort, Bubble Sort, Selection Sort |
-| **Search** | Binary Search |
-| **Graph** | BFS, DFS, Dijkstra, Floyd-Warshall, Bellman-Ford, Kruskal's MST |
-| **Dynamic Programming** | TSP (Bitmask DP), Subset Sum |
-| **Combinatorial** | Permutations |
-| **Array** | Kadane's Algorithm, Find Max/Min, Frequency Count |
+### 3. Analyze Code
+1. Navigate to **http://localhost:3000**.
+2. Paste code into the editor.
+3. Watch as the system detects the language and analyzes complexity.
+4. Check the **History** tab to see saved results from Supabase.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture & Database
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     FRONTEND (React + Vite)                  │
-│  ├── Monaco Editor (Code Input)                              │
-│  ├── Language Detection Badge                                │
-│  └── Recharts (Visualizations)                               │
-├─────────────────────────────────────────────────────────────┤
-│                      API (REST)                              │
-│                   POST /analyze                              │
-├─────────────────────────────────────────────────────────────┤
-│                   BACKEND (Flask)                            │
-│  ├── Static Analyzer (AST for Python, Regex for others)     │
-│  ├── Pattern Analyzer (20+ algorithm patterns)              │
-│  ├── Complexity Rules Engine (Fallback estimation)          │
-│  └── LLM Integration (AI suggestions)                       │
-└─────────────────────────────────────────────────────────────┘
-```
+### Database Schema (Supabase)
+The system requires a table named `analysis_history` with the following columns:
 
-### Backend Modules
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | uuid | Primary Key |
+| `code_hash` | text | Unique SHA-256 hash of the code |
+| `language` | text | Detected programming language |
+| `time_complexity` | text | e.g., "O(n)" |
+| `space_complexity` | text | e.g., "O(1)" |
+| `created_at` | timestamp | Record creation time |
+| `ai_suggestions` | text | Stored LLM advice |
 
-| Module | Description |
-|--------|-------------|
-| `static_analyzer.py` | AST parsing for Python, regex for other languages |
-| `pattern_analyzer.py` | Detects known algorithm patterns |
-| `pattern_confidence.py` | Validates pattern detection accuracy |
-| `complexity_map.py` | Maps patterns to exact Big-O |
-| `complexity_rules.py` | Rule-based fallback for unknown code |
-| `llm.py` | LLM integration for suggestions |
+### API Endpoints
 
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **React 19** - UI Framework
-- **TypeScript** - Type Safety
-- **Vite** - Build Tool
-- **Monaco Editor** - Code Editor
-- **Recharts** - Data Visualization
-- **Lucide React** - Icons
-
-### Backend
-- **Flask** - Web Framework
-- **Python AST** - Abstract Syntax Tree Parsing
-- **Regex** - Pattern Matching
-- **OpenRouter/Gemini** - LLM API
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/analyze` | content-type: `application/json` - Analyzes code and saves result. |
+| `GET` | `/history` | Fetches the last 50 analysis records. |
+| `POST` | `/auth/*` | Auth routes (login/signup) if enabled. |
 
 ---
 
@@ -196,68 +165,28 @@ Navigate to: **http://localhost:3000**
 
 ```
 DeepCodeX/
-├── frontend/
-│   ├── components/
-│   │   ├── Layout.tsx
-│   │   ├── Logo.tsx
-│   │   └── ui/Loader.tsx
-│   ├── pages/
-│   │   ├── CodeAnalysis.tsx    # Main analysis page
-│   │   ├── Dashboard.tsx       # Overview dashboard
-│   │   └── History.tsx         # Analysis history
-│   ├── services/
-│   │   └── apiService.ts       # API calls
-│   └── types.ts                # TypeScript types
-├── backend/
-│   ├── analyzer/
-│   │   ├── static_analyzer.py     # AST/Regex analysis
-│   │   ├── pattern_analyzer.py    # Pattern detection
-│   │   ├── pattern_confidence.py  # Confidence validation
-│   │   ├── complexity_map.py      # Pattern → Big-O
-│   │   ├── complexity_rules.py    # Fallback rules
-│   │   └── fallback.py            # Main analysis pipeline
-│   ├── ai/
-│   │   └── llm.py                 # LLM integration
-│   ├── auth/
-│   │   └── auth.py                # Authentication
-│   └── app.py                     # Flask server
-├── .env                           # Environment variables
-├── package.json                   # NPM dependencies
-└── vite.config.ts                 # Vite configuration
+├── frontend/             # React Source Code
+│   ├── components/       # UI Components
+│   └── pages/            # App Routes (Analysis, Dashboard, History)
+├── backend/              # Flask Application
+│   ├── analyzer/         # Core Analysis Logic
+│   ├── db/               # Supabase Client
+│   ├── auth/             # Authentication Routes
+│   └── app.py            # Main Entry Point
+├── package.json          # Frontend Dependencies
+├── vite.config.ts        # Vite Configuration
+└── README.md             # Documentation
 ```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## 👨‍💻 Author
 
 **Modepalli Ravindra**
-
 - GitHub: [@Modepalli-Ravindra](https://github.com/Modepalli-Ravindra)
 
 ---
 
 <div align="center">
-
-**⭐ Star this repository if you find it helpful!**
-
-Made with ❤️ and ☕
-
+Made with ❤️, ☕, and 🐍
 </div>
