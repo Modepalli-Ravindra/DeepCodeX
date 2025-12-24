@@ -129,7 +129,10 @@ Analyze the following code using a strict CHAIN OF THOUGHT process:
 2. KEY OPERATIONS: Identify the loops, recursion depths, and dominant operations.
 3. INPUT SCALING: How do these operations grow as input 'N' increases?
 4. WORST CASE: Consider the worst-case scenario (e.g., quicksort pivot selection, hash collisions).
-5. CONSTANT BOUNDS: check if the input is fixed (e.g., logic(5)). If fixed, complexity is O(1).
+5. INTRINSIC COMPLEXITY PRIORITY:
+   - If a function `solve(n)` is O(n), but called as `solve(5)`, report O(n) (the algorithmic complexity).
+   - Only report O(1) if the algorithm ITSELF is constant time regardless of input.
+   - For recursive functions (e.g. Fibonacci), report the complexity of the recursion relation (e.g. O(2^n)), NOT the runtime of a specific call.
 6. SPACE ANALYSIS: Include stack depth for recursion and auxiliary memory.
 
 CODE:

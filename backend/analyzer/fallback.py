@@ -94,6 +94,7 @@ def analyze_with_fallback(code: str, static: dict) -> dict:
     ai_result = analyze_complexity_with_llm(code)
     
     if ai_result:
+        print(f"DEBUG: Using LLM Result: {ai_result}")
         final_time = ai_result.get("time_complexity", "O(n)")
         final_space = ai_result.get("space_complexity", "O(1)")
         reasoning = ai_result.get("reasoning", "AI-Powered Analysis")

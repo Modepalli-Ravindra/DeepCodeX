@@ -369,25 +369,25 @@ export const CodeAnalysis: React.FC = () => {
               <>
                 <div className="space-y-8">
                   {/* BIG METRICS: TIME & SPACE */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="bg-surface/50 border border-gray-800 rounded-3xl p-8 hover:border-indigo-500/50 transition-all group relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <Zap className="w-20 h-20" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-surface/50 border border-gray-800 rounded-2xl p-5 hover:border-indigo-500/50 transition-all group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Zap className="w-12 h-12" />
                       </div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Worst-Case Time</p>
-                      <h2 className="text-5xl font-black text-indigo-400 tracking-tighter">{result.timeComplexity}</h2>
-                      <p className="text-xs text-gray-400 mt-4 font-mono group-hover:text-indigo-300/70 transition-colors">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Worst-Case Time</p>
+                      <h2 className="text-3xl font-black text-indigo-400 tracking-tighter">{result.timeComplexity}</h2>
+                      <p className="text-[10px] text-gray-400 mt-2 font-mono group-hover:text-indigo-300/70 transition-colors truncate">
                         Driver: {result.worstTimeFunction?.split(', ')[0] || "main"}()
                       </p>
                     </div>
 
-                    <div className="bg-surface/50 border border-gray-800 rounded-3xl p-8 hover:border-emerald-500/50 transition-all group relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <Code2 className="w-20 h-20" />
+                    <div className="bg-surface/50 border border-gray-800 rounded-2xl p-5 hover:border-emerald-500/50 transition-all group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Code2 className="w-12 h-12" />
                       </div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Worst-Case Space</p>
-                      <h2 className="text-5xl font-black text-emerald-400 tracking-tighter">{result.spaceComplexity}</h2>
-                      <p className="text-xs text-gray-400 mt-4 font-mono group-hover:text-emerald-300/70 transition-colors">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Worst-Case Space</p>
+                      <h2 className="text-3xl font-black text-emerald-400 tracking-tighter">{result.spaceComplexity}</h2>
+                      <p className="text-[10px] text-gray-400 mt-2 font-mono group-hover:text-emerald-300/70 transition-colors truncate">
                         Driver: {result.worstSpaceFunction?.split(', ')[0] || "main"}()
                       </p>
                     </div>

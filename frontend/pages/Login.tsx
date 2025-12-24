@@ -2,17 +2,29 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, ArrowRight } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { supabase } from '../supabaseClient'; // 🔐 CHANGED
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock authentication
-    if (email && password) {
-      localStorage.setItem('auth_token', 'mock_token_xyz');
+
+    // 🔐 CHANGED: real Supabase authentication
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data.session) {
+      localStorage.setItem('auth_token', data.session.access_token);
       navigate('/');
     }
   };

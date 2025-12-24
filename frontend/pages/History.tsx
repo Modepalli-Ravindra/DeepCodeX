@@ -1,25 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { AnalysisResult } from '../types';
-import { Clock, Search, ChevronRight, FileCode } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { AnalysisResult } from "../types";
+import { Clock, Search, FileCode } from "lucide-react";
+import { getHistory } from "../services/apiService"; // ✅ ADD
 
 export const History: React.FC = () => {
   const [history, setHistory] = useState<AnalysisResult[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
+  // ✅ FIX: Load history from backend (Supabase), NOT localStorage
   useEffect(() => {
-    const data = localStorage.getItem('analysis_history');
-    if (data) {
+    const fetchHistory = async () => {
       try {
-        setHistory(JSON.parse(data));
+        const data = await getHistory();
+
+        const adapted: AnalysisResult[] = data.map((item: any) => ({
+          id: item.id,
+          fileName: "Code Analysis",
+          timestamp: item.created_at,
+
+          language: item.language,
+          timeComplexity: item.time_complexity,
+          spaceComplexity: item.space_complexity,
+
+          complexityLevel:
+            item.cyclomatic > 15
+              ? "High"
+              : item.cyclomatic > 7
+              ? "Medium"
+              : "Low",
+
+          score: item.optimization_score ?? 0,
+
+          metrics: {
+            linesOfCode: item.lines ?? 0,
+            functionCount: item.functions ?? 0,
+            loopCount: item.loops ?? 0,
+            conditionalCount: item.conditions ?? 0,
+            cyclomaticComplexity: item.cyclomatic ?? 0,
+          },
+
+          suggestions: item.ai_suggestions
+            ? item.ai_suggestions.split("\n")
+            : [],
+        }));
+
+        setHistory(adapted);
       } catch (e) {
-        console.error('Failed to parse history', e);
+        console.error("Failed to fetch history", e);
       }
-    }
+    };
+
+    fetchHistory();
   }, []);
 
-  const filteredHistory = history.filter(item => 
-    item.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.language.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredHistory = history.filter(
+    (item) =>
+      item.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.language.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -52,49 +89,75 @@ export const History: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/50">
-                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">File / Date</th>
-                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Complexity</th>
-                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Score</th>
-                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Language</th>
-                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Metrics</th>
+                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase">
+                    File / Date
+                  </th>
+                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase">
+                    Complexity
+                  </th>
+                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase">
+                    Score
+                  </th>
+                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase">
+                    Language
+                  </th>
+                  <th className="p-4 text-xs font-semibold text-gray-400 uppercase">
+                    Metrics
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {filteredHistory.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-800/50 transition-colors group cursor-default">
+                  <tr
+                    key={item.id}
+                    className="hover:bg-gray-800/50 transition-colors"
+                  >
                     <td className="p-4">
                       <div className="flex items-center">
                         <div className="bg-primary/10 p-2 rounded mr-3">
-                           <FileCode className="w-4 h-4 text-primary" />
+                          <FileCode className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                          <div className="font-medium text-white">{item.fileName}</div>
-                          <div className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleDateString()}</div>
+                          <div className="font-medium text-white">
+                            {item.fileName}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(item.timestamp).toLocaleDateString()}
+                          </div>
                         </div>
                       </div>
                     </td>
+
                     <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${item.complexityLevel === 'High' ? 'bg-red-500/10 text-red-400' : 
-                          item.complexityLevel === 'Medium' ? 'bg-yellow-500/10 text-yellow-400' : 
-                          'bg-green-500/10 text-green-400'}`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium
+                        ${
+                          item.complexityLevel === "High"
+                            ? "bg-red-500/10 text-red-400"
+                            : item.complexityLevel === "Medium"
+                            ? "bg-yellow-500/10 text-yellow-400"
+                            : "bg-green-500/10 text-green-400"
+                        }`}
+                      >
                         {item.complexityLevel}
                       </span>
                     </td>
+
                     <td className="p-4">
-                      <div className="flex items-center">
-                        <span className="font-mono font-medium text-gray-300">{item.score}</span>
-                        <span className="text-gray-600 text-xs ml-1">/100</span>
-                      </div>
+                      <span className="font-mono text-gray-300">
+                        {item.score}/100
+                      </span>
                     </td>
-                    <td className="p-4">
-                      <span className="text-gray-400 capitalize">{item.language}</span>
+
+                    <td className="p-4 text-gray-400 capitalize">
+                      {item.language}
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                         <span>LO: {item.timeComplexity}</span>
-                         <span>LOC: {item.metrics.linesOfCode}</span>
-                      </div>
+
+                    <td className="p-4 text-xs text-gray-500">
+                      <span>LO: {item.timeComplexity}</span>
+                      <span className="ml-4">
+                        LOC: {item.metrics.linesOfCode}
+                      </span>
                     </td>
                   </tr>
                 ))}

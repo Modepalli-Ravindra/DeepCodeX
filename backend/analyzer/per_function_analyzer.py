@@ -14,10 +14,10 @@ Based on industry-correct definitions.
 
 import ast
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
-
+from analyzer.std_lib_kb import METHOD_COMPLEXITY_MAP
 
 class RecursionType(Enum):
     """Correct recursion classification patterns"""
@@ -132,12 +132,12 @@ class PerFunctionAnalyzer:
         effective_times = []
         for f in self.functions:
             is_entry = f.name == "main" or f.name.startswith("run_")
-            is_scaling = f.name in called_with_scaling
+            is_scaling = f.name in called_with_scaling or f.uses_param_as_bound
             
             # COLLAPSE RULE: Demo code called with constants is O(1) effectively
             should_collapse = False
             if f.time_complexity in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]:
-                if not is_scaling and not is_entry and not f.uses_param_as_bound:
+                if not is_scaling and not is_entry:
                     should_collapse = True
             
             if should_collapse:
@@ -149,14 +149,19 @@ class PerFunctionAnalyzer:
         effective_worst_time = self._get_worst_complexity([et[1] for et in effective_times])
         
         # DUAL-MODE RESOLUTION:
-        # For small demo files (single-purpose), the Intrinsic Complexity is the 'Truth'.
-        # For larger systems, the Effective Complexity is the 'Reality'.
-        if effective_worst_time == "O(1)" and intrinsic_worst_time != "O(1)":
-            worst_time = intrinsic_worst_time
-            is_collapsed_demo = True
+        # If the code snippet is small (likely a demo) or contains high-complexity algorithms,
+        # prioritize the INTRINSIC theoretical complexity over the EFFECTIVE runtime complexity.
+        # This prevents 'fib(5)' from being reported as O(1) when the user wants to know about 'fib(n)'.
+        is_high_complexity = intrinsic_worst_time in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]
+        is_short_code = len(self.code.split('\n')) < 50
+        
+        if intrinsic_worst_time in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"] or is_short_code:
+             print(f"DEBUG: Forcing Intrinsic Complexity {intrinsic_worst_time} (Effective was {effective_worst_time})")
+             worst_time = intrinsic_worst_time
+             is_collapsed_demo = False
         else:
             worst_time = effective_worst_time
-            is_collapsed_demo = False
+            is_collapsed_demo = True
 
         # RULE 3: Global Space Analysis
         # Check for global arrays that might dominate space (e.g. adj[100][100])
@@ -235,7 +240,7 @@ class PerFunctionAnalyzer:
                 self.functions.append(func_analysis)
     
     def _analyze_python_function(self, node: ast.FunctionDef, func_code: str) -> FunctionComplexity:
-        """Analyze a single Python function."""
+        """Analyze a single Python function using TAINT ANALYSIS."""
         
         # Count loops and track depth
         loop_depth = 0
@@ -249,7 +254,16 @@ class PerFunctionAnalyzer:
         # Track data structures for space
         data_structures = []
         
-        class FunctionVisitor(ast.NodeVisitor):
+        # ==========================================
+        # TAINT TRACKING SYSTEM
+        # ==========================================
+        tainted_vars: Set[str] = set()
+        
+        # 1. Initialize Taint: Arguments are sources of scaling
+        for arg in node.args.args:
+            tainted_vars.add(arg.arg)
+            
+        class TaintVisitor(ast.NodeVisitor):
             def __init__(self):
                 self.loop_depth = 0
                 self.max_loop_depth = 0
@@ -258,22 +272,67 @@ class PerFunctionAnalyzer:
                 self.allocations = []
                 self.external_calls = []
                 self.params = [a.arg for a in node.args.args]
-                self.uses_param_as_bound = False
+                self.uses_param_as_bound = False # Does any loop depend on contaminated vars?
                 self.recursion_calls = 0
                 self.in_recursion = False
-            
+                
+                # Complexity Accumulators
+                self.detected_complexities = [] # Stores e.g. ["O(n)", "O(log n)"] from API calls
+                
+            def is_node_tainted(self, n) -> bool:
+                """Check if an AST node involves a tainted variable."""
+                for name_node in ast.walk(n):
+                    if isinstance(name_node, ast.Name) and name_node.id in tainted_vars:
+                        return True
+                return False
+                
+            def visit_Assign(self, n):
+                """Propagate taint: x = n * 2 (x becomes tainted)"""
+                # Check if RHS is tainted
+                rhs_tainted = self.is_node_tainted(n.value)
+                
+                # Check if RHS is a scaling function call (e.g. x = range(n))
+                if isinstance(n.value, ast.Call):
+                    # Check method map
+                    func_id = None
+                    if isinstance(n.value.func, ast.Name): func_id = n.value.func.id
+                    elif isinstance(n.value.func, ast.Attribute): func_id = n.value.func.attr
+                    
+                    if func_id in METHOD_COMPLEXITY_MAP:
+                        # If a function returns a large structure (e.g. list), the result is tainted structure
+                        # But here we mainly care about SCALAR taint (scaling numbers)
+                        # Assume complexity map ops don't return scaling SCALARS usually, except 'len' (which passes taint)
+                        if func_id == 'len':
+                            rhs_tainted = self.is_node_tainted(n.value)
+
+                # Assign taint to LHS
+                if rhs_tainted:
+                    for target in n.targets:
+                        if isinstance(target, ast.Name):
+                            tainted_vars.add(target.id)
+                else:
+                    # Sanitize: x = 5 (x is no longer tainted)
+                    for target in n.targets:
+                        if isinstance(target, ast.Name) and isinstance(n.value, (ast.Constant, ast.Num, ast.Str)):
+                            if target.id in tainted_vars:
+                                tainted_vars.remove(target.id)
+                self.generic_visit(n)
+
             def visit_For(self, n):
                 self.loop_count += 1
                 self.loop_depth += 1
                 self.max_loop_depth = max(self.max_loop_depth, self.loop_depth)
+                
                 if self.in_recursion:
                     self.has_loop_in_recursion = True
                 
-                # Check if param is used in range() or iterator
+                # TAINT CHECK: Loop bound
+                is_tainted_bound = False
                 if hasattr(n, 'iter'):
-                    for name_node in ast.walk(n.iter):
-                        if isinstance(name_node, ast.Name) and name_node.id in self.params:
-                            self.uses_param_as_bound = True
+                     is_tainted_bound = self.is_node_tainted(n.iter)
+                
+                if is_tainted_bound:
+                    self.uses_param_as_bound = True
                 
                 self.generic_visit(n)
                 self.loop_depth -= 1
@@ -282,37 +341,56 @@ class PerFunctionAnalyzer:
                 self.loop_count += 1
                 self.loop_depth += 1
                 self.max_loop_depth = max(self.max_loop_depth, self.loop_depth)
+                
                 if self.in_recursion:
                     self.has_loop_in_recursion = True
                 
-                # Check if param is used in test
-                for name_node in ast.walk(n.test):
-                    if isinstance(name_node, ast.Name) and name_node.id in self.params:
-                        self.uses_param_as_bound = True
+                # TAINT CHECK: Loop condition
+                if self.is_node_tainted(n.test):
+                    self.uses_param_as_bound = True
                         
                 self.generic_visit(n)
                 self.loop_depth -= 1
             
             def visit_Call(self, n):
+                func_id = None
                 if isinstance(n.func, ast.Name):
-                    if n.func.id == func_name:
-                        self.recursion_calls += 1
-                        self.in_recursion = True
+                    func_id = n.func.id
+                elif isinstance(n.func, ast.Attribute):
+                    func_id = n.func.attr
+                
+                # Recursion Check
+                if func_id == func_name:
+                    self.recursion_calls += 1
+                    self.in_recursion = True
+                    # Check taint in arguments
+                    if any(self.is_node_tainted(arg) for arg in n.args):
+                        self.uses_param_as_bound = True
+                else:
+                    # Standard Lib Complexity Check
+                    if func_id in METHOD_COMPLEXITY_MAP:
+                        # Only count complexity if arguments are tainted!
+                        # e.g. sort([1,2,3]) is O(1). sort(input_arr) is O(N log N).
+                        args_tainted = any(self.is_node_tainted(arg) for arg in n.args)
                         
-                        # Check if param is used in recursive call args (decrement/driver)
-                        for arg in n.args:
-                            for name_node in ast.walk(arg):
-                                if isinstance(name_node, ast.Name) and name_node.id in self.params:
-                                    self.uses_param_as_bound = True
-                    else:
-                        # Detect if call is constant-bounded (literal arguments)
-                        args_str = ", ".join([ast.dump(arg) for arg in n.args])
-                        is_constant = len(n.args) > 0 and all(isinstance(arg, (ast.Constant, ast.Num, ast.Str, ast.Bytes, ast.NameConstant)) for arg in n.args)
-                        self.external_calls.append((n.func.id, is_constant, args_str))
+                        # Special case: 'append' / 'add' on a TAINTED list is O(1) usually, but O(N) amortized
+                        # We use the map.
+                        if args_tainted or isinstance(n.func, ast.Attribute) and (isinstance(n.func.value, ast.Name) and n.func.value.id in tainted_vars):
+                             complexity = METHOD_COMPLEXITY_MAP[func_id]
+                             if complexity != "O(1)":
+                                 self.detected_complexities.append(complexity)
+
+                    # External Call Tracker
+                    args_str = ", ".join([ast.dump(arg) for arg in n.args])
+                    is_constant = len(n.args) > 0 and all(isinstance(arg, (ast.Constant, ast.Num, ast.Str, ast.Bytes, ast.NameConstant)) for arg in n.args)
+                    self.external_calls.append((func_id or "unknown", is_constant, args_str))
+                    
                 self.generic_visit(n)
             
             def visit_List(self, n):
                 self.allocations.append("list")
+                # List construction with tainted vars is O(N) copy check?
+                # Usually list literal [a,b,c] is O(1) unless unpacked
                 self.generic_visit(n)
             
             def visit_Dict(self, n):
@@ -321,9 +399,14 @@ class PerFunctionAnalyzer:
             
             def visit_ListComp(self, n):
                 self.allocations.append("list_comp")
+                # List comp is implicit loop
+                for gen in n.generators:
+                    if self.is_node_tainted(gen.iter):
+                        self.uses_param_as_bound = True
+                        self.detected_complexities.append("O(n)")
                 self.generic_visit(n)
         
-        visitor = FunctionVisitor()
+        visitor = TaintVisitor()
         visitor.visit(node)
         
         loop_depth = visitor.max_loop_depth
@@ -337,12 +420,30 @@ class PerFunctionAnalyzer:
             visitor.has_loop_in_recursion, loop_depth
         )
         
-        # Compute time complexity
-        time_complexity = self._compute_time_complexity(
+        # Compute time complexity based on Taint Analysis & Loops
+        # 1. Base Structural Complexity (Loops)
+        base_time = self._compute_time_complexity(
             loop_depth, loop_count, recursion_type, 
             recursion_calls, visitor.has_loop_in_recursion, func_code
         )
         
+        # 2. API / Library Complexity check
+        api_time = self._get_worst_complexity(visitor.detected_complexities) if visitor.detected_complexities else "O(1)"
+        
+        # 3. Combine
+        final_time = self._get_worst_complexity([base_time, api_time])
+        
+        # 4. IF Taint Analysis says 'Constant', downgrade?
+        # Only downgrade if loops > 0 OR recursion > 0.
+        # If Visitor says 'uses_param_as_bound' is False, and API calls are clean...
+        # strict check:
+        if (loop_count > 0 or recursion_calls > 0) and not visitor.uses_param_as_bound:
+            # Code has loops, but they don't depend on inputs. O(1).
+            # e.g. for i in range(100): print(i)
+            # CAUTION: 'calls' might have side effects? Assuming pure algorithmic analysis.
+            if not visitor.detected_complexities:
+                 final_time = "O(1)"
+
         # Compute space complexity
         space_complexity = self._compute_space_complexity(
             data_structures, recursion_type, loop_depth, func_code
@@ -350,14 +451,17 @@ class PerFunctionAnalyzer:
         
         # Generate reasoning
         reasoning = self._generate_reasoning(
-            loop_depth, recursion_type, recursion_calls, time_complexity, func_code
+            loop_depth, recursion_type, recursion_calls, final_time, func_code
         )
+        
+        if not visitor.uses_param_as_bound and (loop_count > 0 or recursion_calls > 0):
+            reasoning += " (Loops/Recursion operate on constant bounds)."
         
         return FunctionComplexity(
             name=func_name,
             line_start=node.lineno,
             line_end=getattr(node, 'end_lineno', node.lineno + 10),
-            time_complexity=time_complexity,
+            time_complexity=final_time,
             space_complexity=space_complexity,
             loop_depth=loop_depth,
             recursion_type=recursion_type,
@@ -389,7 +493,7 @@ class PerFunctionAnalyzer:
         # 1. GRAPH TRAVERSAL vs FACTORIAL check
         if recursion_calls >= 1 and has_loop:
             is_graph = any(w in code_lower for w in ["visited", "seen", "adj", "neighbor", "edge", "graph", "marked", "is_visited"])
-            has_backtrack = any(w in code_lower for w in ["remove", "pop", "undo", "visited["] and ("false" in code_lower or "null" in code_lower or "0" in code_lower or "none" in code_lower))
+            has_backtrack = any(w in code_lower for w in ["remove", "pop", "undo"]) or ("visited[" in code_lower and any(v in code_lower for v in ["false", "null", "0", "none"]))
             
             # Graph traversals like DFS/BFS are O(V+E), not factorial
             if is_graph and not has_backtrack:
@@ -576,7 +680,7 @@ class PerFunctionAnalyzer:
         """Analyze non-Python code by detecting function boundaries."""
         # Pattern for function definitions (improved for Java/C++ modifiers)
         # Capture: 1. modifiers, 2. return type, 3. function name, 4. parameter list
-        func_pattern = r'(?:public|private|protected|static|final|synchronized|volatile|native|abstract|void|int|bool|string|double|float|auto|[\w<>\b\[\]]+)\s+([\w\d_]+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{'
+        func_pattern = r'(?:public|private|protected|static|final|synchronized|volatile|native|abstract|void|int|bool|string|double|float|auto|function|def|[\w<>\b\[\]]+)\s+([\w\d_]+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{'
         
         lines = self.code.split('\n')
         current_func = None
@@ -652,11 +756,17 @@ class PerFunctionAnalyzer:
         
         # Detect all external calls in the block and identify constant vs scaling
         external_calls = []
+        determined_recursion_calls = 0
+        
         call_matches = re.finditer(r'\b([a-zA-Z_]\w*)\s*\(([^)]*)\)', code)
         for m in call_matches:
             c_name = m.group(1)
-            if c_name == name: continue # skip recursion
             args_str = m.group(2).strip()
+            
+            if c_name == name: 
+                determined_recursion_calls += 1
+                continue # skip adding to external_calls list
+            
             # Constant if empty or only literals/digits (e.g. 8, 20, "ABC")
             # If it contains a word that looks like a variable (n, size, len) -> scaling
             is_const = True
@@ -668,7 +778,7 @@ class PerFunctionAnalyzer:
             external_calls.append((c_name, is_const, args_str))
 
         # Detect recursion (self-calls)
-        recursion_calls = len([c for c in external_calls if c[0] == name])
+        recursion_calls = determined_recursion_calls
         
         # Check for loop in recursion context
         has_loop_in_recursion = recursion_calls > 0 and loop_count > 0
@@ -796,130 +906,26 @@ class PerFunctionAnalyzer:
         num_funcs = len(self.functions)
         categories = list(set(f.category for f in self.functions if f.category != "General"))
         
-        # Check for constant-bounded algorithms
-        has_collapsed = False
-        collapsed_info = ""
-        for f in self.functions:
-            if f.time_complexity in ["O(2ⁿ)", "O(n!)", "O(n³)", "O(n²)"]:
-                if not any(f.name == wf for wf in worst_funcs) or worst_time == "O(1)":
-                    has_collapsed = True
-                    collapsed_info = f" (Intrinsic {f.time_complexity} collapsed to O(1) due to constant bounds)"
-                    break
-        
-        if num_funcs == 1:
-            return f"Single-purpose implementation. {worst_time} time complexity{collapsed_info if has_collapsed else ''}."
-            
-        cat_str = f" ({', '.join(categories)})" if categories else ""
-        return (
-            f"Multiple algorithms detected{cat_str}. "
-            f"Worst-case: {worst_time} triggered by {', '.join(worst_funcs)}.{collapsed_info if has_collapsed else ''}"
-        )
+        return f"Deterministic Analysis: {worst_time} time, {worst_space} space."
 
 
-def analyze_per_function(code: str) -> Dict:
-    """
-    Main entry point for per-function analysis.
-    Returns structured result with per-function breakdown.
-    """
+def analyze_per_function(code: str) -> dict:
+    """Helper for internal usage."""
     analyzer = PerFunctionAnalyzer(code)
     result = analyzer.analyze()
-    
     return {
         "functions": [
             {
                 "name": f.name,
-                "lineStart": f.line_start,
-                "lineEnd": f.line_end,
                 "timeComplexity": f.time_complexity,
                 "spaceComplexity": f.space_complexity,
-                "category": f.category,
-                "loopDepth": f.loop_depth,
-                "recursionType": f.recursion_type.value,
-                "reasoning": f.reasoning
-            }
-            for f in result.functions
+                "reasoning": f.reasoning,
+                "complexity": f.time_complexity # Legacy compat
+            } for f in result.functions
         ],
         "worstTime": result.worst_time,
         "worstSpace": result.worst_space,
         "worstTimeFunction": result.worst_time_function,
         "worstSpaceFunction": result.worst_space_function,
-        "complexityLevel": result.complexity_level,
-        "summary": result.summary,
-        "totalFunctions": len(result.functions)
+        "summary": result.summary
     }
-
-
-# Test
-if __name__ == "__main__":
-    test_code = '''
-def constant_op():
-    x = 1 + 2
-    return x
-
-def linear_search(arr, target):
-    for i in range(len(arr)):
-        if arr[i] == target:
-            return i
-    return -1
-
-def binary_search(arr, target):
-    left, right = 0, len(arr) - 1
-    while left <= right:
-        mid = (left + right) // 2
-        if arr[mid] == target:
-            return mid
-        elif arr[mid] < target:
-            left = mid + 1
-        else:
-            right = mid - 1
-    return -1
-
-def bubble_sort(arr):
-    n = len(arr)
-    for i in range(n):
-        for j in range(n - i - 1):
-            if arr[j] > arr[j+1]:
-                arr[j], arr[j+1] = arr[j+1], arr[j]
-
-def merge_sort(arr):
-    if len(arr) <= 1:
-        return arr
-    mid = len(arr) // 2
-    left = merge_sort(arr[:mid])
-    right = merge_sort(arr[mid:])
-    return merge(left, right)
-
-def fibonacci(n):
-    if n <= 1:
-        return n
-    return fibonacci(n-1) + fibonacci(n-2)
-
-def permutations(arr, start=0):
-    if start == len(arr) - 1:
-        print(arr)
-        return
-    for i in range(start, len(arr)):
-        arr[start], arr[i] = arr[i], arr[start]  # swap
-        permutations(arr, start + 1)
-        arr[start], arr[i] = arr[i], arr[start]  # swap back
-'''
-    
-    result = analyze_per_function(test_code)
-    
-    print("=" * 60)
-    print("PER-FUNCTION COMPLEXITY ANALYSIS")
-    print("=" * 60)
-    
-    for func in result["functions"]:
-        print(f"\n{func['name']}() [lines {func['lineStart']}-{func['lineEnd']}]")
-        print(f"  Time:  {func['timeComplexity']}")
-        print(f"  Space: {func['spaceComplexity']}")
-        print(f"  {func['reasoning']}")
-    
-    print("\n" + "=" * 60)
-    print("WORST-CASE SUMMARY (using MAX, not multiply)")
-    print("=" * 60)
-    print(f"Worst Time:  {result['worstTime']} (from {result['worstTimeFunction']})")
-    print(f"Worst Space: {result['worstSpace']} (from {result['worstSpaceFunction']})")
-    print(f"Level: {result['complexityLevel']}")
-    print(f"Summary: {result['summary']}")

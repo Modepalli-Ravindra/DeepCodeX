@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { supabase } from '../supabaseClient'; // 🔐 ADDED
 
 export const Register: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,7 +12,7 @@ export const Register: React.FC = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -21,9 +22,24 @@ export const Register: React.FC = () => {
     }
 
     if (email && password && name) {
-      // Mock registration success
-      localStorage.setItem('auth_token', 'mock_token_xyz');
-      navigate('/');
+      // 🔐 ONLY CHANGE: real Supabase registration
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (data.session) {
+        localStorage.setItem('auth_token', data.session.access_token);
+        navigate('/');
+      }
     }
   };
 
