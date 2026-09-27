@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, ArrowRight } from 'lucide-react';
 import { Logo } from '../components/Logo';
-import { supabase } from '../supabaseClient'; // 🔐 CHANGED
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,20 +11,28 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 🔐 CHANGED: real Supabase authentication
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const res = await fetch("http://127.0.0.1:5000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Login failed");
+        return;
+      }
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    if (data.session) {
-      localStorage.setItem('auth_token', data.session.access_token);
+      localStorage.setItem('auth_token', data.token);
+      if (data.user && data.user.name) {
+        localStorage.setItem('auth_name', data.user.name);
+      } else {
+        localStorage.setItem('auth_name', email.split('@')[0]);
+      }
       navigate('/');
+    } catch (err) {
+      alert("Error connecting to server");
     }
   };
 
@@ -33,46 +40,42 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <div className="p-2 transition-transform hover:scale-105 duration-500">
-              <Logo className="w-20 h-20" />
-            </div>
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">Welcome back</h2>
-          <p className="mt-2 text-sm text-gray-400">Sign in to DeepCodeX.</p>
+          <Logo className="w-12 h-12 text-primary mx-auto mb-6" />
+          <h2 className="text-2xl font-semibold tracking-tight text-textPrimary">Welcome back</h2>
+          <p className="mt-3 text-sm text-textSecondary">Sign in to DeepCodeX.</p>
         </div>
 
-        <div className="bg-surface p-8 rounded-2xl border border-gray-800 shadow-xl">
+        <div className="bg-secondaryBg p-8 rounded-2xl border border-borderSubtle shadow-premium">
           <form className="space-y-6" onSubmit={handleLogin}>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Email address</label>
+              <label className="block text-sm font-medium text-textPrimary mb-2">Email address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-500" />
+                  <Mail className="h-5 w-5 text-textMuted stroke-[1.5px]" />
                 </div>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-white placeholder-gray-600 sm:text-sm transition-all"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-borderSubtle rounded-lg focus:ring-1 focus:ring-primary/50 focus:border-primary/50 text-textPrimary placeholder:text-textMuted sm:text-sm transition-colors outline-none"
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+              <label className="block text-sm font-medium text-textPrimary mb-2">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-500" />
+                  <Lock className="h-5 w-5 text-textMuted stroke-[1.5px]" />
                 </div>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-white placeholder-gray-600 sm:text-sm transition-all"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-borderSubtle rounded-lg focus:ring-1 focus:ring-primary/50 focus:border-primary/50 text-textPrimary placeholder:text-textMuted sm:text-sm transition-colors outline-none"
                   placeholder="••••••••"
                 />
               </div>
@@ -80,15 +83,15 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full flex items-center justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-gray-900 transition-all transform hover:scale-[1.02]"
+              className="w-full flex items-center justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-background bg-primary hover:bg-primarySubtle focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-background transition-colors"
             >
-              Sign In <ArrowRight className="ml-2 w-4 h-4" />
+              Sign In <ArrowRight className="ml-2 w-4 h-4 stroke-[2px]" />
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm">
-            <span className="text-gray-400">Don't have an account? </span>
-            <Link to="/register" className="font-medium text-primary hover:text-indigo-400">
+            <span className="text-textSecondary">Don't have an account? </span>
+            <Link to="/register" className="font-medium text-primary hover:text-primarySubtle transition-colors">
               Register now
             </Link>
           </div>

@@ -240,15 +240,15 @@ export const CodeAnalysis: React.FC = () => {
     : [];
 
   return (
-    <div className="flex h-full w-full bg-background">
+      <div className="flex flex-col lg:flex-row min-h-full w-full bg-background lg:overflow-hidden">
       {/* EDITOR */}
-      <div className="flex-1 flex flex-col bg-[#1e1e1e]">
+      <div className="flex flex-col bg-background h-[50vh] lg:h-auto lg:flex-1 shrink-0">
         {/* LANGUAGE DETECTION BADGE - TOP OF EDITOR */}
-        <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-[#1a1a2e] to-[#16213e] border-b border-gray-700/50">
+        <div className="flex items-center justify-between px-4 py-2 bg-surface border-b border-borderSubtle">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-gray-400" />
-              <span className="text-xs text-gray-400 uppercase tracking-wider">Language Detected</span>
+              <FileCode className="w-4 h-4 text-textSecondary" />
+              <span className="text-xs text-textSecondary uppercase tracking-wider">Language Detected</span>
             </div>
             <div
               className={`
@@ -265,14 +265,14 @@ export const CodeAnalysis: React.FC = () => {
             >
               <span className="text-lg">{detectedLanguage.icon}</span>
               <span
-                className="font-semibold text-sm"
+                className="font-medium text-sm"
                 style={{ color: detectedLanguage.color }}
               >
                 {detectedLanguage.name}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-textSecondary">
             <Code2 className="w-3 h-3" />
             <span>Auto-detection enabled</span>
           </div>
@@ -297,28 +297,28 @@ export const CodeAnalysis: React.FC = () => {
         </div>
 
         {/* BOTTOM TOOLBAR */}
-        <div className="p-3 flex justify-between items-center bg-[#252526] border-t border-gray-700/50">
+        <div className="p-3 flex justify-between items-center bg-surface border-t border-borderSubtle">
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleAnalyze(code)}
               disabled={loading}
-              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg font-medium flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20"
+              className="px-4 py-2 bg-primary hover:bg-primarySubtle text-background rounded-md font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
               ) : (
-                <Play className="w-4 h-4" />
+                <Play className="w-4 h-4 fill-current" />
               )}
               {loading ? "Analyzing..." : "Analyze"}
             </button>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-textSecondary">
               {code.split('\n').length} lines • {code.length} chars
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg flex items-center gap-2 transition-colors"
+              className="px-3 py-2 bg-secondaryBg hover:bg-surfaceElevated border border-borderSubtle text-textSecondary rounded-md flex items-center gap-2 transition-colors"
             >
               <Upload className="w-4 h-4" />
               <span className="text-sm">Upload</span>
@@ -329,9 +329,9 @@ export const CodeAnalysis: React.FC = () => {
       </div>
 
       {/* ANALYSIS INSIGHTS */}
-      <div className="w-[580px] p-6 space-y-6 bg-gradient-to-b from-[#0b1220] to-[#0e1627] overflow-y-auto">
+      <div className="w-full lg:w-[480px] xl:w-[580px] shrink-0 p-4 md:p-6 space-y-6 bg-background border-t lg:border-t-0 lg:border-l border-borderSubtle lg:overflow-y-auto lg:h-full">
         {loading && <Loader />}
-        {error && <div className="text-red-500">{error}</div>}
+        {error && <div className="text-danger">{error}</div>}
 
         {result && (
           <>
@@ -339,27 +339,27 @@ export const CodeAnalysis: React.FC = () => {
             {result.isCode === false ? (
               /* NO CODE DETECTED */
               <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-12">
-                <div className="w-24 h-24 rounded-full bg-gray-800/50 flex items-center justify-center">
+                <div className="w-24 h-24 rounded-full bg-surface border border-borderSubtle flex items-center justify-center">
                   <span className="text-5xl">📄</span>
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-300 mb-2">No Code Detected</h2>
-                  <p className="text-gray-500 max-w-xs">
+                  <h2 className="text-xl font-medium text-textPrimary mb-2">No Code Detected</h2>
+                  <p className="text-textSecondary max-w-xs text-sm">
                     The input appears to be plain text, not source code.
                   </p>
                 </div>
-                <div className="bg-surface rounded-xl p-5 border border-gray-800 w-full max-w-sm">
-                  <p className="text-xs text-gray-400 mb-3">SUPPORTED LANGUAGES</p>
+                <div className="bg-surface rounded-xl p-5 border border-borderSubtle w-full max-w-sm">
+                  <p className="text-[10px] uppercase tracking-wider text-textSecondary mb-3 font-medium">SUPPORTED LANGUAGES</p>
                   <div className="flex flex-wrap gap-2 justify-center">
                     {["🐍 Python", "☕ Java", "⚡ C++", "🔧 C", "📜 JavaScript", "📘 TypeScript", "🐹 Go", "🦀 Rust", "💎 Ruby", "🐘 PHP"].map((lang) => (
-                      <span key={lang} className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-400">
+                      <span key={lang} className="px-2 py-1 bg-secondaryBg border border-borderSubtle rounded text-xs text-textSecondary">
                         {lang}
                       </span>
                     ))}
                   </div>
                 </div>
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 max-w-sm">
-                  <p className="text-yellow-500 text-sm">
+                <div className="bg-warning/10 border border-warning/20 rounded-md p-4 max-w-sm">
+                  <p className="text-warning text-xs font-medium">
                     💡 Tip: Paste code with functions, loops, or class definitions for complexity analysis.
                   </p>
                 </div>
@@ -367,27 +367,27 @@ export const CodeAnalysis: React.FC = () => {
             ) : (
               /* NORMAL CODE ANALYSIS RESULTS */
               <>
-                <div className="space-y-8">
+                <div className="space-y-6">
                   {/* BIG METRICS: TIME & SPACE */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-surface/50 border border-gray-800 rounded-2xl p-5 hover:border-indigo-500/50 transition-all group relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div className="bg-surface border border-borderSubtle rounded-xl p-5 group relative overflow-hidden shadow-sm">
+                      <div className="absolute top-0 right-0 p-3 opacity-[0.03]">
                         <Zap className="w-12 h-12" />
                       </div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Worst-Case Time</p>
-                      <h2 className="text-3xl font-black text-indigo-400 tracking-tighter">{result.timeComplexity}</h2>
-                      <p className="text-[10px] text-gray-400 mt-2 font-mono group-hover:text-indigo-300/70 transition-colors truncate">
+                      <p className="text-xs text-textSecondary font-medium mb-2">Worst-Case Time</p>
+                      <h2 className="text-3xl font-semibold text-primary tracking-tighter">{result.timeComplexity}</h2>
+                      <p className="text-xs text-textMuted mt-2 font-mono truncate">
                         Driver: {result.worstTimeFunction?.split(', ')[0] || "main"}()
                       </p>
                     </div>
 
-                    <div className="bg-surface/50 border border-gray-800 rounded-2xl p-5 hover:border-emerald-500/50 transition-all group relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div className="bg-surface border border-borderSubtle rounded-xl p-5 group relative overflow-hidden shadow-sm">
+                      <div className="absolute top-0 right-0 p-3 opacity-[0.03]">
                         <Code2 className="w-12 h-12" />
                       </div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Worst-Case Space</p>
-                      <h2 className="text-3xl font-black text-emerald-400 tracking-tighter">{result.spaceComplexity}</h2>
-                      <p className="text-[10px] text-gray-400 mt-2 font-mono group-hover:text-emerald-300/70 transition-colors truncate">
+                      <p className="text-xs text-textSecondary font-medium mb-2">Worst-Case Space</p>
+                      <h2 className="text-3xl font-semibold text-success tracking-tighter">{result.spaceComplexity}</h2>
+                      <p className="text-xs text-textMuted mt-2 font-mono truncate">
                         Driver: {result.worstSpaceFunction?.split(', ')[0] || "main"}()
                       </p>
                     </div>
@@ -395,83 +395,82 @@ export const CodeAnalysis: React.FC = () => {
 
                   {/* SUMMARY NOTE */}
                   {result.summary && (
-                    <div className="px-6 py-4 bg-white/[0.03] border border-white/5 rounded-2xl">
-                      <p className="text-xs text-indigo-300/80 leading-relaxed font-medium italic">
+                    <div className="px-5 py-4 bg-surface border border-borderSubtle rounded-xl shadow-sm">
+                      <p className="text-sm text-textPrimary leading-relaxed">
                         {result.summary}
                       </p>
                     </div>
                   )}
 
                   {/* CORE STATISTICS GRID */}
-                  {/* CORE STATISTICS GRID */}
-                  <div className="bg-surface border border-gray-800 rounded-3xl overflow-hidden">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-800">
+                  <div className="bg-surface border border-borderSubtle rounded-xl overflow-hidden shadow-sm">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-borderSubtle">
                       {/* Left: Text Stats */}
-                      <div className="divide-y divide-gray-800 h-full flex flex-col justify-center">
-                        <div className="grid grid-cols-2 divide-x divide-gray-800 flex-1">
-                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Lines of Code</p>
-                            <p className="text-3xl font-bold text-gray-100">{result.metrics.linesOfCode}</p>
+                      <div className="divide-y divide-borderSubtle h-full flex flex-col justify-center">
+                        <div className="grid grid-cols-2 divide-x divide-borderSubtle flex-1">
+                          <div className="p-5 flex flex-col justify-center text-center">
+                            <p className="text-[10px] uppercase text-textSecondary font-medium tracking-wider mb-1">Lines of Code</p>
+                            <p className="text-2xl font-semibold text-textPrimary">{result.metrics.linesOfCode}</p>
                           </div>
-                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Functions</p>
-                            <p className="text-3xl font-bold text-gray-100">{result.metrics.functionCount}</p>
+                          <div className="p-5 flex flex-col justify-center text-center">
+                            <p className="text-[10px] uppercase text-textSecondary font-medium tracking-wider mb-1">Functions</p>
+                            <p className="text-2xl font-semibold text-textPrimary">{result.metrics.functionCount}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 divide-x divide-gray-800 flex-1">
-                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Loops</p>
-                            <p className="text-3xl font-bold text-gray-100">{result.metrics.loopCount}</p>
+                        <div className="grid grid-cols-2 divide-x divide-borderSubtle flex-1">
+                          <div className="p-5 flex flex-col justify-center text-center">
+                            <p className="text-[10px] uppercase text-textSecondary font-medium tracking-wider mb-1">Loops</p>
+                            <p className="text-2xl font-semibold text-textPrimary">{result.metrics.loopCount}</p>
                           </div>
-                          <div className="p-6 flex flex-col justify-center text-center hover:bg-white/[0.02] transition-colors">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Number of Conditions</p>
-                            <p className="text-3xl font-bold text-gray-100">{result.metrics.conditionalCount}</p>
+                          <div className="p-5 flex flex-col justify-center text-center">
+                            <p className="text-[10px] uppercase text-textSecondary font-medium tracking-wider mb-1">Conditions</p>
+                            <p className="text-2xl font-semibold text-textPrimary">{result.metrics.conditionalCount}</p>
                           </div>
                         </div>
                       </div>
 
                       {/* Right: Chart */}
-                      <div className="p-6 h-[250px] bg-white/[0.01] flex items-center justify-center relative group">
+                      <div className="p-6 h-[250px] bg-secondaryBg flex items-center justify-center relative group">
                         <div className="absolute top-3 right-4">
-                          <span className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">Metrics Visualizer</span>
+                          <span className="text-[10px] font-medium text-textSecondary uppercase tracking-wider">Metrics Visualizer</span>
                         </div>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={metricData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                             <XAxis
                               dataKey="name"
-                              stroke="#6b7280"
+                              stroke="#71717A"
                               fontSize={11}
                               tickLine={false}
                               axisLine={false}
                               dy={10}
                             />
                             <YAxis
-                              stroke="#6b7280"
+                              stroke="#71717A"
                               fontSize={11}
                               tickLine={false}
                               axisLine={false}
                             />
                             <Tooltip
-                              cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                              cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                borderColor: '#1e293b',
-                                color: '#f8fafc',
+                                backgroundColor: '#19191C',
+                                borderColor: 'rgba(255,255,255,0.08)',
+                                color: '#F5F5F5',
                                 borderRadius: '8px',
                                 fontSize: '12px'
                               }}
-                              itemStyle={{ color: '#818cf8' }}
+                              itemStyle={{ color: '#FF7A59' }}
                             />
                             <Bar
                               dataKey="value"
-                              fill="#6366f1"
-                              radius={[4, 4, 0, 0]}
-                              barSize={30}
+                              fill="#FF7A59"
+                              radius={[2, 2, 0, 0]}
+                              barSize={24}
                               animationDuration={1500}
                             >
                               {metricData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b'][index % 5]} />
+                                <Cell key={`cell-${index}`} fill={['#FF7A59', '#34D399', '#FBBF24', '#F87171', '#FF9B7A'][index % 5]} />
                               ))}
                             </Bar>
                           </BarChart>
@@ -481,26 +480,23 @@ export const CodeAnalysis: React.FC = () => {
                   </div>
 
                   {/* OPTIMIZATION & SUGGESTIONS */}
-                  <div className="bg-gradient-to-br from-indigo-600/10 to-purple-600/10 border border-indigo-500/20 rounded-3xl p-8 relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-8">
+                  <div className="bg-surface border border-borderSubtle rounded-xl p-6 shadow-sm">
+                    <div className="flex justify-between items-start mb-6">
                       <div>
-                        <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold mb-2">Peak Optimization Potential</p>
-                        <h3 className="text-4xl font-black text-white">{result.optimizationPercentage}%</h3>
-                      </div>
-                      <div className="bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-500/30">
-                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-tighter">Optimization Insights</span>
+                        <p className="text-xs text-textSecondary font-medium mb-1">Peak Optimization Potential</p>
+                        <h3 className="text-4xl font-semibold text-textPrimary">{result.optimizationPercentage}%</h3>
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Improvement Roadmap</p>
-                      <div className="grid gap-3">
+                      <p className="text-xs font-medium text-textSecondary mb-3 uppercase tracking-wider">Improvement Roadmap</p>
+                      <div className="grid gap-2">
                         {result.suggestions.map((s: string, i: number) => (
-                          <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600/50 text-[10px] font-bold flex items-center justify-center">
-                              0{i + 1}
+                          <div key={i} className="flex gap-4 p-3 bg-secondaryBg rounded-lg border border-borderSubtle">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-surfaceElevated border border-borderSubtle text-xs font-medium flex items-center justify-center text-textPrimary">
+                              {i + 1}
                             </span>
-                            <p className="text-sm text-gray-200 leading-relaxed font-medium">{s}</p>
+                            <p className="text-sm text-textPrimary leading-relaxed pt-0.5">{s}</p>
                           </div>
                         ))}
                       </div>

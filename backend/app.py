@@ -17,26 +17,50 @@ from analyzer.fallback import analyze_with_fallback
 from analyzer.language_router import detect_language
 from auth.auth import auth_bp
 
-from db.supabase_client import supabase
 import hashlib
-import jwt
-import os
+import sqlite3
 
 app = Flask(__name__)
-# Allow * allows any origin, including localhost and 192.168.x.x
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "OPTIONS"])
 
 app.register_blueprint(auth_bp, url_prefix="/auth")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+def get_db_connection():
+    conn = sqlite3.connect('history.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Initialize JWK Client for Supabase (Handling ES256/RS256)
-jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
-jwk_client = jwt.PyJWKClient(jwks_url)
+def init_db():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS analysis_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            language TEXT,
+            code_hash TEXT,
+            time_complexity TEXT,
+            space_complexity TEXT,
+            cyclomatic TEXT,
+            optimization_score REAL,
+            functions INTEGER,
+            loops INTEGER,
+            conditions INTEGER,
+            lines INTEGER,
+            ai_suggestions TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
 
 def hash_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
+
+import jwt
+
+JWT_SECRET = "your_super_secret_jwt_key_here"
 
 def get_user_id_from_request():
     auth_header = request.headers.get("Authorization")
@@ -44,29 +68,10 @@ def get_user_id_from_request():
         return None, "Missing or invalid Authorization header"
 
     token = auth_header.replace("Bearer ", "")
+
     try:
-        # 1. Try verifying with Supabase JWKS (Handles ES256/RS256)
-        try:
-            signing_key = jwk_client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["HS256", "ES256", "RS256"],
-                audience="authenticated",
-            )
-            return payload.get("sub"), None
-        except Exception as jwk_err:
-            # 2. Fallback to HS256 with shared secret (Legacy/Alternative)
-            try:
-                payload = jwt.decode(
-                    token,
-                    SUPABASE_JWT_SECRET,
-                    algorithms=["HS256"],
-                    audience="authenticated",
-                )
-                return payload.get("sub"), None
-            except Exception as hs_err:
-                return None, f"Auth Error: {str(jwk_err)}"
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload.get("sub"), None
     except Exception as e:
         return None, f"Auth Error: {str(e)}"
 
@@ -116,22 +121,28 @@ def analyze_code():
         final_result["isCode"] = True
 
         try:
-            supabase.table("analysis_history").insert({
-                "user_id": user_id,  # 🔐 REQUIRED
-                "language": final_result.get("language"),
-                "code_hash": hash_code(code),
-                "time_complexity": final_result.get("timeComplexity"),
-                "space_complexity": final_result.get("spaceComplexity"),
-                "cyclomatic": final_result.get("cyclomaticComplexity"),
-                "optimization_score": final_result.get("optimizationPercentage"),
-                "functions": static_result.get("functionCount"),
-                "loops": static_result.get("loopCount"),
-                "conditions": static_result.get("conditionalCount"),
-                "lines": static_result.get("linesOfCode"),
-                "ai_suggestions": "\n".join(final_result.get("suggestions", [])),
-            }).execute()
+            conn = get_db_connection()
+            conn.execute('''
+                INSERT INTO analysis_history (user_id, language, code_hash, time_complexity, space_complexity, cyclomatic, optimization_score, functions, loops, conditions, lines, ai_suggestions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                final_result.get("language"),
+                hash_code(code),
+                final_result.get("timeComplexity"),
+                final_result.get("spaceComplexity"),
+                final_result.get("cyclomaticComplexity"),
+                final_result.get("optimizationPercentage"),
+                static_result.get("functionCount"),
+                static_result.get("loopCount"),
+                static_result.get("conditionalCount"),
+                static_result.get("linesOfCode"),
+                "\n".join(final_result.get("suggestions", []))
+            ))
+            conn.commit()
+            conn.close()
         except Exception as e:
-            print("Supabase insert failed:", e)
+            print("SQLite insert failed:", e)
 
         return jsonify(final_result)
     except Exception as e:
@@ -147,18 +158,15 @@ def get_history():
         return jsonify({"error": auth_error}), 401
 
     try:
-        response = (
-            supabase
-            .table("analysis_history")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(50)
-            .execute()
-        )
-        return jsonify(response.data)
+        conn = get_db_connection()
+        rows = conn.execute(
+            'SELECT * FROM analysis_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+            (user_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify([dict(row) for row in rows])
     except Exception as e:
-        print("Supabase history fetch failed:", e)
+        print("SQLite history fetch failed:", e)
         return jsonify([])
 
 

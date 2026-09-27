@@ -6,6 +6,9 @@ import { CodeAnalysis } from './pages/CodeAnalysis';
 import { History } from './pages/History';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { Placeholder } from './pages/Placeholder';
+import { Settings } from './pages/Settings';
+import { Docs } from './pages/Docs';
 
 // Protected Route Wrapper
 const ProtectedRoute = () => {
@@ -32,6 +35,10 @@ const App: React.FC = () => {
             <Route index element={<Dashboard />} />
             <Route path="analyze" element={<CodeAnalysis />} />
             <Route path="history" element={<History />} />
+            <Route path="projects" element={<Placeholder title="Projects" />} />
+            <Route path="reports" element={<Placeholder title="Reports" />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="docs" element={<Docs />} />
           </Route>
         </Route>
 

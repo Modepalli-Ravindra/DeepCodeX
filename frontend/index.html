@@ -11,21 +11,28 @@
         theme: {
           extend: {
             colors: {
-              background: '#0f172a', // Slate 900
-              surface: '#1e293b',    // Slate 800
-              primary: '#6366f1',    // Indigo 500
-              secondary: '#64748b',  // Slate 500
-              accent: '#38bdf8',     // Sky 400
-              danger: '#ef4444',     // Red 500
-              success: '#22c55e',    // Green 500
-              warning: '#eab308',    // Yellow 500
+              background: '#0F111A',
+              secondaryBg: '#151822',
+              surface: '#1A1D27',
+              surfaceElevated: '#222634',
+              primary: '#635BFF',
+              primarySubtle: '#8C85FF',
+              accent: '#FF7A59',
+              textPrimary: '#FFFFFF',
+              textSecondary: '#A1A1AA',
+              textMuted: '#71717A',
+              borderSubtle: 'rgba(255,255,255,0.06)',
+              success: '#10B981',
+              warning: '#F59E0B',
+              danger: '#EF4444',
             },
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
               mono: ['Fira Code', 'monospace'],
             },
-            animation: {
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            boxShadow: {
+              'premium': '0 4px 24px -4px rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+              'glow': '0 0 20px rgba(99, 91, 255, 0.3)',
             }
           },
         },
@@ -35,23 +42,23 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0f172a;
-        color: #f8fafc;
+        background-color: #0F111A;
+        color: #FFFFFF;
       }
       /* Custom scrollbar for dark theme */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #0f172a; 
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #334155; 
+        background: rgba(255,255,255,0.1); 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
+        background: rgba(255,255,255,0.2); 
       }
     </style>
 
